@@ -286,6 +286,10 @@ input:focus {
   width: 100%;
 }
 
+.primary-btn.wide {
+  width: 100%;
+}
+
 button:disabled,
 input:disabled {
   opacity: 0.6;

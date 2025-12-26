@@ -2,7 +2,7 @@ import click
 from flask import Flask
 
 from .config import Config
-from .extensions import db, login_manager, oauth
+from .extensions import csrf, db, login_manager, oauth
 from .models import EnargasCredentials, ImgToPdfJob, Proceso, RpaEnargasJob, User
 
 
@@ -13,6 +13,7 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     oauth.init_app(app)
+    csrf.init_app(app)
 
     _register_keycloak(app)
 

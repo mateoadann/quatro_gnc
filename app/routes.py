@@ -14,6 +14,7 @@ from flask_login import current_user, login_required
 
 from .extensions import db
 from .models import EnargasCredentials, ImgToPdfJob, Proceso
+from .services.rpa_enargas import NoOperacionesError, run_rpa
 
 
 main = Blueprint("main", __name__)
@@ -58,6 +59,14 @@ def rpa_enargas():
             )
             return redirect(url_for("main.rpa_enargas"))
 
+        credentials = EnargasCredentials.query.filter_by(user_id=current_user.id).first()
+        if not credentials:
+            flash("Carga las credenciales de Enargas antes de ejecutar.", "error")
+            return redirect(url_for("main.settings"))
+        if not credentials.get_password():
+            flash("Completa la contrasena de Enargas antes de ejecutar.", "error")
+            return redirect(url_for("main.settings"))
+
         proceso = Proceso(
             user_id=current_user.id,
             patente=patente,
@@ -65,7 +74,30 @@ def rpa_enargas():
         )
         db.session.add(proceso)
         db.session.commit()
-        flash("Proceso creado, listo para ejecutar el RPA.", "success")
+
+        try:
+            result = run_rpa(
+                patente,
+                credentials.enargas_user,
+                credentials.get_password(),
+            )
+            proceso.estado = "completado"
+            proceso.resultado = result.get("resultado")
+            proceso.pdf_data = result.get("pdf_data")
+            proceso.pdf_filename = result.get("pdf_filename")
+            flash("Proceso completado.", "success")
+        except NoOperacionesError:
+            proceso.estado = "completado"
+            proceso.resultado = "Patente NO registrada"
+            proceso.pdf_data = None
+            proceso.pdf_filename = None
+            flash("Patente NO registrada en ENARGAS.", "warning")
+        except Exception:
+            proceso.estado = "error"
+            proceso.resultado = None
+            flash("Error al ejecutar el proceso RPA.", "error")
+
+        db.session.commit()
         return redirect(url_for("main.rpa_enargas"))
 
     procesos = Proceso.query.order_by(Proceso.created_at.desc()).all()

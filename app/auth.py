@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import secrets
 from urllib.parse import urlencode
 
@@ -28,47 +30,36 @@ def load_user(user_id):
 
 @auth.route("/login", methods=["GET", "POST"])
 def login():
-    keycloak_enabled = current_app.config.get("KEYCLOAK_ENABLED")
+    client = _get_keycloak_client()
+    keycloak_enabled = current_app.config.get("KEYCLOAK_ENABLED") and client is not None
 
-    if keycloak_enabled:
-        client = _get_keycloak_client()
-        if not client:
+    if request.method == "POST":
+        if not keycloak_enabled:
             flash("Keycloak no esta configurado.", "error")
             return render_template("login.html", keycloak_enabled=False)
 
-        if request.method == "POST":
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "").strip()
-            token, userinfo, error = _keycloak_password_login(username, password)
-            if error:
-                flash(error, "error")
-                return render_template("login.html", keycloak_enabled=True)
-
-            user = _get_or_create_user(userinfo, username)
-            if not user:
-                flash("Usuario no autorizado en esta aplicacion.", "error")
-                return render_template("login.html", keycloak_enabled=True)
-
-            login_user(user)
-            session["keycloak_token"] = token
-            if token.get("id_token"):
-                session["keycloak_id_token"] = token.get("id_token")
-            session["keycloak_auth_flow"] = "password"
-            return redirect(url_for("main.dashboard"))
-
-        return render_template("login.html", keycloak_enabled=True)
-
-    if request.method == "POST":
         username = request.form.get("username", "").strip()
         password = request.form.get("password", "").strip()
-        user = User.query.filter_by(username=username).first()
-        if not user or not user.check_password(password):
-            flash("Credenciales invalidas.", "error")
-        else:
-            login_user(user)
-            return redirect(url_for("main.dashboard"))
+        token, userinfo, error = _keycloak_password_login(username, password)
+        if error:
+            flash(error, "error")
+            return render_template("login.html", keycloak_enabled=True)
 
-    return render_template("login.html", keycloak_enabled=False)
+        user = _get_or_create_user(userinfo, username)
+        if not user:
+            flash("Usuario no autorizado en esta aplicacion.", "error")
+            return render_template("login.html", keycloak_enabled=True)
+
+        login_user(user)
+        session["keycloak_token"] = token
+        if token.get("id_token"):
+            session["keycloak_id_token"] = token.get("id_token")
+        session["keycloak_auth_flow"] = "password"
+        return redirect(url_for("main.dashboard"))
+
+    if not keycloak_enabled:
+        flash("Keycloak no esta configurado.", "error")
+    return render_template("login.html", keycloak_enabled=keycloak_enabled)
 
 
 @auth.route("/logout")
@@ -78,6 +69,7 @@ def logout():
     id_token = session.pop("keycloak_id_token", None)
     token = session.pop("keycloak_token", None)
     auth_flow = session.pop("keycloak_auth_flow", None)
+    session.pop("pkce_verifier", None)
     if token and not id_token:
         id_token = token.get("id_token")
 
@@ -106,7 +98,14 @@ def keycloak_login():
     redirect_uri = current_app.config.get("KEYCLOAK_REDIRECT_URI") or url_for(
         "auth.keycloak_callback", _external=True
     )
-    return client.authorize_redirect(redirect_uri)
+    code_verifier = _generate_pkce_verifier()
+    session["pkce_verifier"] = code_verifier
+    code_challenge = _generate_pkce_challenge(code_verifier)
+    return client.authorize_redirect(
+        redirect_uri,
+        code_challenge=code_challenge,
+        code_challenge_method="S256",
+    )
 
 
 @auth.route("/auth/keycloak/callback")
@@ -116,7 +115,11 @@ def keycloak_callback():
         flash("Keycloak no esta configurado.", "error")
         return redirect(url_for("auth.login"))
 
-    token = client.authorize_access_token()
+    code_verifier = session.pop("pkce_verifier", None)
+    if not code_verifier:
+        flash("Sesion de autenticacion expirada. Intenta de nuevo.", "error")
+        return redirect(url_for("auth.login"))
+    token = client.authorize_access_token(code_verifier=code_verifier)
     if not token:
         flash("No se pudo completar la autenticacion.", "error")
         return redirect(url_for("auth.login"))
@@ -161,49 +164,6 @@ def _get_keycloak_logout_url():
     return None
 
 
-def _keycloak_password_login(username, password):
-    client = _get_keycloak_client()
-    if not client:
-        return None, None, "Keycloak no esta configurado."
-    metadata = client.load_server_metadata()
-    token_url = metadata.get("token_endpoint")
-    userinfo_url = metadata.get("userinfo_endpoint")
-
-    if not token_url:
-        return None, None, "No se encontro el endpoint de token en Keycloak."
-
-    data = {
-        "grant_type": "password",
-        "client_id": current_app.config.get("KEYCLOAK_CLIENT_ID", ""),
-        "username": username,
-        "password": password,
-        "scope": current_app.config.get("KEYCLOAK_SCOPE", "openid email profile"),
-    }
-    client_secret = current_app.config.get("KEYCLOAK_CLIENT_SECRET")
-    if client_secret:
-        data["client_secret"] = client_secret
-
-    response = requests.post(token_url, data=data, timeout=10)
-    if not response.ok:
-        payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
-        error = payload.get("error_description") or "Credenciales invalidas."
-        return None, None, error
-
-    token = response.json()
-    userinfo = {}
-    access_token = token.get("access_token")
-    if userinfo_url and access_token:
-        info_response = requests.get(
-            userinfo_url,
-            headers={"Authorization": f"Bearer {access_token}"},
-            timeout=10,
-        )
-        if info_response.ok:
-            userinfo = info_response.json()
-
-    return token, userinfo, None
-
-
 def _get_or_create_user(userinfo, fallback_username=None):
     username = (
         userinfo.get("preferred_username")
@@ -239,3 +199,58 @@ def _get_or_create_user(userinfo, fallback_username=None):
         if updated:
             db.session.commit()
     return user
+
+
+def _generate_pkce_verifier():
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode("utf-8")
+
+
+def _generate_pkce_challenge(verifier):
+    digest = hashlib.sha256(verifier.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("utf-8")
+
+
+def _keycloak_password_login(username, password):
+    client = _get_keycloak_client()
+    if not client:
+        return None, None, "Keycloak no esta configurado."
+    metadata = client.load_server_metadata()
+    token_url = metadata.get("token_endpoint")
+    userinfo_url = metadata.get("userinfo_endpoint")
+
+    if not token_url:
+        return None, None, "No se encontro el endpoint de token en Keycloak."
+
+    data = {
+        "grant_type": "password",
+        "client_id": current_app.config.get("KEYCLOAK_CLIENT_ID", ""),
+        "username": username,
+        "password": password,
+        "scope": current_app.config.get("KEYCLOAK_SCOPE", "openid email profile"),
+    }
+    client_secret = current_app.config.get("KEYCLOAK_CLIENT_SECRET")
+    if client_secret:
+        data["client_secret"] = client_secret
+
+    response = requests.post(token_url, data=data, timeout=10)
+    if not response.ok:
+        payload = {}
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("application/json"):
+            payload = response.json()
+        error = payload.get("error_description") or "Credenciales invalidas."
+        return None, None, error
+
+    token = response.json()
+    userinfo = {}
+    access_token = token.get("access_token")
+    if userinfo_url and access_token:
+        info_response = requests.get(
+            userinfo_url,
+            headers={"Authorization": f"Bearer {access_token}"},
+            timeout=10,
+        )
+        if info_response.ok:
+            userinfo = info_response.json()
+
+    return token, userinfo, None

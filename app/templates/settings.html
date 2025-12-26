@@ -12,6 +12,7 @@
   <div class="card">
     <h2>Credenciales Enargas</h2>
     <form class="form-grid" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <label>
         Usuario Enargas
         <input

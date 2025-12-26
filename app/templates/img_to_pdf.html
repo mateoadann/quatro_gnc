@@ -12,6 +12,7 @@
   <div class="card">
     <h2>Cargar imagenes</h2>
     <form class="form-grid" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <label>
         Seleccionar archivos
         <input type="file" name="images" multiple disabled />

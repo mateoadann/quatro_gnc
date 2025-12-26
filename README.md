@@ -12,6 +12,7 @@ Primeros pasos para un dashboard Flask con dos herramientas: IMG_to_PDF y RPA_En
 ## Requisitos
 - Python 3.11+ (compatible con 3.13 via psycopg3)
 - Postgres 16+ (o Docker)
+- Playwright (para RPA_Enargas)
 
 ## Configuracion local
 1) Crear entorno virtual e instalar dependencias:
@@ -20,6 +21,12 @@ Primeros pasos para un dashboard Flask con dos herramientas: IMG_to_PDF y RPA_En
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+```
+
+Si vas a usar RPA_Enargas, instala el navegador:
+
+```bash
+playwright install chromium
 ```
 
 2) Crear un `.env` desde el ejemplo (usa `postgresql+psycopg://`):
@@ -66,16 +73,18 @@ Luego se puede conectar la logica a nuevos endpoints en `app/routes.py`.
 
 ## Keycloak
 Se dejaron variables de entorno en `.env.example` para integrar el flujo OIDC.
-La app usa el formulario propio y valida contra Keycloak con **Direct Access Grants**.
+La app usa el formulario propio y valida credenciales contra Keycloak con **Direct Access Grants**.
 
 Pasos recomendados:
 1) En Keycloak, crear un cliente "Confidential" con:
    - Direct Access Grants: **ON**
-   - Redirect URI: `http://localhost:5000/auth/keycloak/callback` (opcional si luego queres SSO)
+   - Standard Flow: **OFF** (opcional)
+   - Redirect URI: `http://localhost:5000/auth/keycloak/callback` (opcional si habilitas SSO)
    - Post logout redirect URI: `http://localhost:5000/login`
 2) En `.env`, configurar:
    - `KEYCLOAK_ENABLED=true`
    - `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`
    - `KEYCLOAK_REDIRECT_URI` y `KEYCLOAK_POST_LOGOUT_REDIRECT_URI` si son distintos
+   - En produccion: `SESSION_COOKIE_SECURE=true`
 
 La app crea usuarios locales si `KEYCLOAK_AUTO_PROVISION=true`.
