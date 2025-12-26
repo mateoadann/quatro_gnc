@@ -14,10 +14,18 @@
     <form class="form-grid" method="post">
       <label>
         Patente
-        <input type="text" name="patente" placeholder="AB123CD" disabled />
+        <input
+          type="text"
+          name="patente"
+          placeholder="AB123CD"
+          pattern="^([A-Za-z]{3}[0-9]{3}|[A-Za-z]{2}[0-9]{3}[A-Za-z]{2})$"
+          title="Formato permitido: AAA123 o AA123AA"
+          data-uppercase="true"
+          required
+        />
       </label>
-      <button class="primary-btn" type="button" disabled>Ejecutar (proximamente)</button>
-      <p class="muted">Se integrara el flujo RPA con tablas en la siguiente iteracion.</p>
+      <button class="primary-btn" type="submit">Crear proceso</button>
+      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p>
     </form>
   </div>
 
@@ -33,14 +41,19 @@
         </tr>
       </thead>
       <tbody>
-        {% for job in jobs %}
+        {% for proceso in procesos %}
         <tr>
-          <td>{{ job.patente }}</td>
-          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
-          <td>{{ job.result_code or "-" }}</td>
+          <td>{{ proceso.patente }}</td>
+          <td><span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span></td>
+          <td>{{ proceso.resultado or "-" }}</td>
           <td>
+            {% if proceso.pdf_data %}
+            <a class="ghost-btn" href="{{ url_for('main.rpa_enargas_preview', proceso_id=proceso.id) }}" target="_blank" rel="noopener">Previsualizar</a>
+            <a class="ghost-btn" href="{{ url_for('main.rpa_enargas_pdf', proceso_id=proceso.id) }}">Descargar</a>
+            {% else %}
             <button class="ghost-btn" type="button" disabled>Previsualizar</button>
             <button class="ghost-btn" type="button" disabled>Descargar</button>
+            {% endif %}
           </td>
         </tr>
         {% else %}

@@ -3,7 +3,7 @@ from flask import Flask
 
 from .config import Config
 from .extensions import db, login_manager
-from .models import ImgToPdfJob, RpaEnargasJob, User
+from .models import ImgToPdfJob, Proceso, RpaEnargasJob, User
 
 
 def create_app():
@@ -81,6 +81,26 @@ def _seed_data(app):
                 patente="XY987ZT",
                 status="queued",
                 result_code="pending",
+                pdf_filename=None,
+            )
+        )
+
+    if not Proceso.query.first():
+        db.session.add(
+            Proceso(
+                user_id=default_user.id,
+                patente="AA123BB",
+                estado="completado",
+                resultado="Revonar Oblea",
+                pdf_filename="proceso_AA123BB.pdf",
+            )
+        )
+        db.session.add(
+            Proceso(
+                user_id=default_user.id,
+                patente="ABC123",
+                estado="en proceso",
+                resultado=None,
                 pdf_filename=None,
             )
         )

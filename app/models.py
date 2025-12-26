@@ -17,6 +17,7 @@ class User(UserMixin, db.Model):
 
     img_jobs = db.relationship("ImgToPdfJob", backref="user", lazy=True)
     rpa_jobs = db.relationship("RpaEnargasJob", backref="user", lazy=True)
+    procesos = db.relationship("Proceso", backref="user", lazy=True)
 
     def set_password(self, value):
         self.password_hash = generate_password_hash(value)
@@ -46,5 +47,18 @@ class RpaEnargasJob(db.Model):
     patente = db.Column(db.String(40), nullable=False)
     status = db.Column(db.String(40), default="queued")
     result_code = db.Column(db.String(40), nullable=True)
+    pdf_filename = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Proceso(db.Model):
+    __tablename__ = "proceso"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    patente = db.Column(db.String(10), nullable=False)
+    estado = db.Column(db.String(20), nullable=False, default="en proceso")
+    resultado = db.Column(db.String(30), nullable=True)
+    pdf_data = db.Column(db.LargeBinary, nullable=True)
     pdf_filename = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

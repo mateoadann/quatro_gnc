@@ -285,6 +285,21 @@ td {
   color: var(--muted);
 }
 
+.badge.en-proceso {
+  background: rgba(200, 106, 43, 0.2);
+  color: #98521f;
+}
+
+.badge.completado {
+  background: rgba(11, 107, 111, 0.15);
+  color: var(--accent-strong);
+}
+
+.badge.error {
+  background: rgba(188, 60, 60, 0.15);
+  color: #a34343;
+}
+
 .muted {
   color: var(--muted);
 }
