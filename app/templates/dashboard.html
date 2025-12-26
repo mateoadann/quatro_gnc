@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+  <div>
+    <h1>Dashboard general</h1>
+    <p>Resumen de actividad para IMG_to_PDF y RPA_Enargas.</p>
+  </div>
+  <div class="hero-actions">
+    <a class="primary-btn" href="{{ url_for('main.img_to_pdf') }}">Ir a IMG_to_PDF</a>
+    <a class="ghost-btn" href="{{ url_for('main.rpa_enargas') }}">Ir a RPA_Enargas</a>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>IMG_to_PDF recientes</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Paginas</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in img_jobs %}
+        <tr>
+          <td>{{ job.filename }}</td>
+          <td>{{ job.page_count }}</td>
+          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="muted">Sin trabajos aun.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>RPA_Enargas recientes</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Patente</th>
+          <th>Estado</th>
+          <th>Resultado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in rpa_jobs %}
+        <tr>
+          <td>{{ job.patente }}</td>
+          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.result_code or "-" }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="muted">Sin ejecuciones aun.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

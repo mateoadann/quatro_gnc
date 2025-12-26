@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="auth-layout">
+  <div class="card auth-card">
+    <div class="card-header">
+      <h1>Bienvenido a QuatroGNC</h1>
+      <p>Accede al dashboard para operar las herramientas.</p>
+    </div>
+    <form method="post" class="form-grid">
+      <label>
+        Usuario
+        <input type="text" name="username" required placeholder="usuario" />
+      </label>
+      <label>
+        Contrasena
+        <input type="password" name="password" required placeholder="********" />
+      </label>
+      <button type="submit" class="primary-btn">Ingresar</button>
+    </form>
+    {% if keycloak_enabled %}
+    <div class="divider">o</div>
+    <a class="ghost-btn wide" href="{{ url_for('auth.keycloak_login') }}">Ingresar con Keycloak</a>
+    {% endif %}
+  </div>
+  <div class="auth-aside">
+    <h2>Operaciones en un solo lugar</h2>
+    <ul>
+      <li>Procesa imagenes para imprimir en PDF.</li>
+      <li>Automatiza consultas RPA de Enargas.</li>
+      <li>Gestiona credenciales y resultados desde un tablero.</li>
+    </ul>
+  </div>
+</section>
+{% endblock %}

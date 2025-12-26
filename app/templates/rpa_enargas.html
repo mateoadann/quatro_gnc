@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero compact">
+  <div>
+    <h1>RPA_Enargas</h1>
+    <p>Ejecuta consultas automatizadas y gestiona los PDFs obtenidos.</p>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Nueva consulta</h2>
+    <form class="form-grid" method="post">
+      <label>
+        Patente
+        <input type="text" name="patente" placeholder="AB123CD" disabled />
+      </label>
+      <button class="primary-btn" type="button" disabled>Ejecutar (proximamente)</button>
+      <p class="muted">Se integrara el flujo RPA con tablas en la siguiente iteracion.</p>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Consultas recientes</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Patente</th>
+          <th>Estado</th>
+          <th>Resultado</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.patente }}</td>
+          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+          <td>{{ job.result_code or "-" }}</td>
+          <td>
+            <button class="ghost-btn" type="button" disabled>Previsualizar</button>
+            <button class="ghost-btn" type="button" disabled>Descargar</button>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="4" class="muted">Sin consultas aun.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

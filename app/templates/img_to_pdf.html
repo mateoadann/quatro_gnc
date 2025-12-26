@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero compact">
+  <div>
+    <h1>IMG_to_PDF</h1>
+    <p>Convierte imagenes en un PDF listo para imprimir con filtros de mejora.</p>
+  </div>
+</section>
+
+<section class="grid">
+  <div class="card">
+    <h2>Cargar imagenes</h2>
+    <form class="form-grid" method="post" enctype="multipart/form-data">
+      <label>
+        Seleccionar archivos
+        <input type="file" name="images" multiple disabled />
+      </label>
+      <button class="primary-btn" type="button" disabled>Procesar (proximamente)</button>
+      <p class="muted">La logica de conversion se integrara en la siguiente iteracion.</p>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Historial</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Paginas</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.filename }}</td>
+          <td>{{ job.page_count }}</td>
+          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="3" class="muted">Aun no hay conversiones.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}
