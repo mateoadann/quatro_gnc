@@ -17,6 +17,14 @@ class Config:
     KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "")
     KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "")
     KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
+    KEYCLOAK_REDIRECT_URI = os.getenv("KEYCLOAK_REDIRECT_URI", "")
+    KEYCLOAK_POST_LOGOUT_REDIRECT_URI = os.getenv(
+        "KEYCLOAK_POST_LOGOUT_REDIRECT_URI", ""
+    )
+    KEYCLOAK_SCOPE = os.getenv("KEYCLOAK_SCOPE", "openid email profile")
+    KEYCLOAK_AUTO_PROVISION = (
+        os.getenv("KEYCLOAK_AUTO_PROVISION", "true").lower() == "true"
+    )
 
     DEFAULT_ADMIN_USER = os.getenv("DEFAULT_ADMIN_USER", "admin")
     DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")

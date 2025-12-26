@@ -16,3 +16,22 @@ uppercaseInputs.forEach((input) => {
     }
   });
 });
+
+const toggleButtons = document.querySelectorAll("[data-toggle-password]");
+toggleButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetId = button.getAttribute("data-target");
+    const target = targetId ? document.getElementById(targetId) : null;
+    if (!target) {
+      return;
+    }
+    const isPassword = target.type === "password";
+    target.type = isPassword ? "text" : "password";
+    button.classList.toggle("is-active", isPassword);
+    button.setAttribute(
+      "aria-label",
+      isPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+    );
+    button.setAttribute("aria-pressed", isPassword ? "true" : "false");
+  });
+});

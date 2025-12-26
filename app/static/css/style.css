@@ -10,7 +10,7 @@
   --accent-2: #c86a2b;
   --card: #ffffff;
   --line: #e4d9cb;
-  --radius: 18px;
+  --radius: 14px;
   --shadow: 0 18px 45px rgba(31, 27, 22, 0.08);
 }
 
@@ -51,7 +51,7 @@ body {
   gap: 18px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(8px);
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 14px 22px;
   box-shadow: var(--shadow);
 }
@@ -76,7 +76,7 @@ body {
 
 .nav-links a {
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   text-decoration: none;
   color: var(--ink);
   background: transparent;
@@ -188,10 +188,58 @@ label {
 
 input {
   padding: 12px 14px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   font-family: inherit;
   font-size: 1rem;
+}
+
+input[type="password"],
+input[type="text"] {
+  width: 100%;
+}
+
+.input-with-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.input-with-toggle input {
+  flex: 1;
+}
+
+.toggle-password {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.toggle-password:hover {
+  border-color: var(--accent-2);
+}
+
+.toggle-password svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.toggle-password .icon-eye-off {
+  display: none;
+}
+
+.toggle-password.is-active .icon-eye {
+  display: none;
+}
+
+.toggle-password.is-active .icon-eye-off {
+  display: block;
 }
 
 input:focus {
@@ -204,7 +252,7 @@ input:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: var(--radius);
   padding: 10px 18px;
   border: none;
   font-family: inherit;
@@ -263,7 +311,7 @@ td {
 
 .badge {
   padding: 4px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius);
   font-size: 0.85rem;
   background: #f0ebe2;
   color: var(--muted);
@@ -311,7 +359,7 @@ td {
 
 .flash {
   padding: 12px 16px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: #fff4e3;
   border: 1px solid #f5d7b3;
 }
@@ -366,7 +414,7 @@ td {
   .topbar {
     flex-direction: column;
     align-items: flex-start;
-    border-radius: 24px;
+    border-radius: var(--radius);
   }
 
   .hero {

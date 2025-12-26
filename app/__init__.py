@@ -2,8 +2,8 @@ import click
 from flask import Flask
 
 from .config import Config
-from .extensions import db, login_manager
-from .models import ImgToPdfJob, Proceso, RpaEnargasJob, User
+from .extensions import db, login_manager, oauth
+from .models import EnargasCredentials, ImgToPdfJob, Proceso, RpaEnargasJob, User
 
 
 def create_app():
@@ -12,6 +12,9 @@ def create_app():
 
     db.init_app(app)
     login_manager.init_app(app)
+    oauth.init_app(app)
+
+    _register_keycloak(app)
 
     from .auth import auth
     from .routes import main
@@ -35,6 +38,28 @@ def create_app():
     return app
 
 
+def _register_keycloak(app):
+    if not app.config.get("KEYCLOAK_ENABLED"):
+        return
+
+    base_url = app.config.get("KEYCLOAK_BASE_URL", "").rstrip("/")
+    realm = app.config.get("KEYCLOAK_REALM", "").strip()
+    client_id = app.config.get("KEYCLOAK_CLIENT_ID", "").strip()
+    if not base_url or not realm or not client_id:
+        return
+
+    metadata_url = f"{base_url}/realms/{realm}/.well-known/openid-configuration"
+    oauth.register(
+        name="keycloak",
+        client_id=client_id,
+        client_secret=app.config.get("KEYCLOAK_CLIENT_SECRET", ""),
+        server_metadata_url=metadata_url,
+        client_kwargs={
+            "scope": app.config.get("KEYCLOAK_SCOPE", "openid email profile")
+        },
+    )
+
+
 def _seed_data(app):
     default_user = User.query.filter_by(
         username=app.config["DEFAULT_ADMIN_USER"]
@@ -42,10 +67,16 @@ def _seed_data(app):
     if not default_user:
         default_user = User(username=app.config["DEFAULT_ADMIN_USER"])
         default_user.set_password(app.config["DEFAULT_ADMIN_PASSWORD"])
-        default_user.enargas_user = "demo_enargas"
-        default_user.set_enargas_password("demo_password")
         db.session.add(default_user)
         db.session.commit()
+
+    if not EnargasCredentials.query.filter_by(user_id=default_user.id).first():
+        credentials = EnargasCredentials(
+            user_id=default_user.id,
+            enargas_user="demo_enargas",
+        )
+        credentials.set_password("demo_password")
+        db.session.add(credentials)
 
     if not ImgToPdfJob.query.first():
         db.session.add(

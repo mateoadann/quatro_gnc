@@ -11,13 +11,16 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    enargas_user = db.Column(db.String(120), nullable=True)
-    enargas_password_encrypted = db.Column(db.Text, nullable=True)
+    first_name = db.Column(db.String(120), nullable=True)
+    last_name = db.Column(db.String(120), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     img_jobs = db.relationship("ImgToPdfJob", backref="user", lazy=True)
     rpa_jobs = db.relationship("RpaEnargasJob", backref="user", lazy=True)
     procesos = db.relationship("Proceso", backref="user", lazy=True)
+    enargas_credentials = db.relationship(
+        "EnargasCredentials", backref="user", uselist=False, lazy=True
+    )
 
     def set_password(self, value):
         self.password_hash = generate_password_hash(value)
@@ -25,10 +28,22 @@ class User(UserMixin, db.Model):
     def check_password(self, value):
         return check_password_hash(self.password_hash, value)
 
-    def set_enargas_password(self, value):
+class EnargasCredentials(db.Model):
+    __tablename__ = "enargas_credenciales"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    enargas_user = db.Column(db.String(120), nullable=False)
+    enargas_password_encrypted = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def set_password(self, value):
         self.enargas_password_encrypted = encrypt_value(value)
 
-    def get_enargas_password(self):
+    def get_password(self):
         return decrypt_value(self.enargas_password_encrypted)
 
 

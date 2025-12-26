@@ -13,7 +13,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from .extensions import db
-from .models import ImgToPdfJob, Proceso
+from .models import EnargasCredentials, ImgToPdfJob, Proceso
 
 
 main = Blueprint("main", __name__)
@@ -102,14 +102,44 @@ def _send_proceso_pdf(proceso_id, as_attachment):
 @main.route("/settings", methods=["GET", "POST"])
 @login_required
 def settings():
+    credentials = EnargasCredentials.query.filter_by(user_id=current_user.id).first()
+
     if request.method == "POST":
         enargas_user = request.form.get("enargas_user", "").strip()
         enargas_password = request.form.get("enargas_password", "").strip()
-        current_user.enargas_user = enargas_user
-        if enargas_password:
-            current_user.set_enargas_password(enargas_password)
+        if not enargas_user:
+            flash("El usuario de Enargas es obligatorio.", "error")
+            return redirect(url_for("main.settings"))
+
+        if not credentials:
+            if not enargas_password:
+                flash("La contrasena de Enargas es obligatoria.", "error")
+                return redirect(url_for("main.settings"))
+            credentials = EnargasCredentials(
+                user_id=current_user.id,
+                enargas_user=enargas_user,
+            )
+            credentials.set_password(enargas_password)
+            db.session.add(credentials)
+        else:
+            credentials.enargas_user = enargas_user
+            if enargas_password:
+                credentials.set_password(enargas_password)
+
         db.session.commit()
         flash("Configuracion actualizada.", "success")
         return redirect(url_for("main.settings"))
 
-    return render_template("settings.html")
+    masked_password = ""
+    if credentials:
+        password_value = credentials.get_password()
+        if password_value:
+            masked_password = (
+                f"{password_value[:4]}{'*' * max(len(password_value) - 4, 0)}"
+            )
+
+    return render_template(
+        "settings.html",
+        credentials=credentials,
+        masked_password=masked_password,
+    )
