@@ -13,6 +13,7 @@ Primeros pasos para un dashboard Flask con dos herramientas: IMG_to_PDF y RPA_En
 - Python 3.11+ (compatible con 3.13 via psycopg3)
 - Postgres 16+ (o Docker)
 - Playwright (para RPA_Enargas)
+- Redis (para cola RQ)
 
 ## Configuracion local
 1) Crear entorno virtual e instalar dependencias:
@@ -27,6 +28,12 @@ Si vas a usar RPA_Enargas, instala el navegador:
 
 ```bash
 playwright install chromium
+```
+
+Si vas a usar el procesamiento en background:
+
+```bash
+redis-server
 ```
 
 2) Crear un `.env` desde el ejemplo (usa `postgresql+psycopg://`):
@@ -48,6 +55,12 @@ flask --app run.py seed-db
 python run.py
 ```
 
+En otra terminal, iniciar el worker RQ:
+
+```bash
+python worker.py
+```
+
 Login con Keycloak:
 - Usar un usuario creado en el realm configurado.
 
@@ -62,6 +75,12 @@ Luego inicializa la base con:
 ```bash
 docker compose exec web flask --app run.py init-db
 docker compose exec web flask --app run.py seed-db
+```
+
+Si queres levantar solo algunos servicios:
+
+```bash
+docker compose up --build web db redis
 ```
 
 ## Integracion de herramientas

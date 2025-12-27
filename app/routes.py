@@ -1,29 +1,35 @@
 import io
 import re
+import threading
+
+from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
     send_file,
     url_for,
 )
+from flask import current_app
 from flask_login import current_user, login_required
 
 from .extensions import db
 from .models import EnargasCredentials, ImgToPdfJob, Proceso
-from .services.rpa_enargas import NoOperacionesError, run_rpa
+from .queue import get_queue
 
 
 main = Blueprint("main", __name__)
 
-PATENTE_PATTERN = re.compile(r"^(?:[A-Z]{3}\\d{3}|[A-Z]{2}\\d{3}[A-Z]{2})$")
+PATENTE_PATTERN = re.compile(r"^(?:[A-Z]{3}\d{3}|[A-Z]{2}\d{3}[A-Z]{2})$")
 
 
 def _normalize_patente(raw_value):
-    return raw_value.strip().upper()
+    cleaned = re.sub(r"[^A-Za-z0-9]", "", raw_value)
+    return cleaned.upper()
 
 
 def _is_valid_patente(value):
@@ -54,7 +60,7 @@ def rpa_enargas():
         patente = _normalize_patente(request.form.get("patente", ""))
         if not _is_valid_patente(patente):
             flash(
-                "La patente debe ser AAA123 o AA123AA.",
+                "La patente debe ser AAA123 o AA123AA (con o sin guiones/espacios).",
                 "error",
             )
             return redirect(url_for("main.rpa_enargas"))
@@ -75,33 +81,64 @@ def rpa_enargas():
         db.session.add(proceso)
         db.session.commit()
 
-        try:
-            result = run_rpa(
-                patente,
-                credentials.enargas_user,
-                credentials.get_password(),
-            )
-            proceso.estado = "completado"
-            proceso.resultado = result.get("resultado")
-            proceso.pdf_data = result.get("pdf_data")
-            proceso.pdf_filename = result.get("pdf_filename")
-            flash("Proceso completado.", "success")
-        except NoOperacionesError:
-            proceso.estado = "completado"
-            proceso.resultado = "Patente NO registrada"
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            flash("Patente NO registrada en ENARGAS.", "warning")
-        except Exception:
-            proceso.estado = "error"
-            proceso.resultado = None
-            flash("Error al ejecutar el proceso RPA.", "error")
-
-        db.session.commit()
+        _enqueue_rpa_async(proceso.id)
+        flash("Proceso en cola. Se actualizara cuando finalice.", "success")
         return redirect(url_for("main.rpa_enargas"))
 
     procesos = Proceso.query.order_by(Proceso.created_at.desc()).all()
-    return render_template("rpa_enargas.html", procesos=procesos)
+    has_pending = any(proceso.estado == "en proceso" for proceso in procesos)
+    stale_ids = _get_stale_ids(procesos, minutes=10)
+    return render_template(
+        "rpa_enargas.html",
+        procesos=procesos,
+        has_pending=has_pending,
+        stale_ids=stale_ids,
+    )
+
+
+@main.route("/tools/rpa-enargas/table")
+@login_required
+def rpa_enargas_table():
+    procesos = Proceso.query.order_by(Proceso.created_at.desc()).all()
+    has_pending = any(proceso.estado == "en proceso" for proceso in procesos)
+    stale_ids = _get_stale_ids(procesos, minutes=10)
+    html = render_template(
+        "partials/rpa_enargas_rows.html",
+        procesos=procesos,
+        stale_ids=stale_ids,
+    )
+    return jsonify({"html": html, "has_pending": has_pending})
+
+
+@main.route("/tools/rpa-enargas/<int:proceso_id>/retry", methods=["POST"])
+@login_required
+def rpa_enargas_retry(proceso_id):
+    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
+    if not proceso:
+        flash("Proceso no encontrado.", "error")
+        return redirect(url_for("main.rpa_enargas"))
+
+    proceso.estado = "en proceso"
+    proceso.resultado = None
+    proceso.pdf_data = None
+    proceso.pdf_filename = None
+    proceso.error_message = None
+    db.session.commit()
+
+    _enqueue_rpa_async(proceso.id)
+    flash("Proceso reencolado.", "success")
+    return redirect(url_for("main.rpa_enargas"))
+
+
+def _get_stale_ids(procesos, minutes=10):
+    threshold = datetime.utcnow() - timedelta(minutes=minutes)
+    return {
+        proceso.id
+        for proceso in procesos
+        if proceso.estado == "en proceso"
+        and proceso.updated_at
+        and proceso.updated_at < threshold
+    }
 
 
 @main.route("/tools/rpa-enargas/<int:proceso_id>/pdf")
@@ -129,6 +166,28 @@ def _send_proceso_pdf(proceso_id, as_attachment):
         as_attachment=as_attachment,
         download_name=filename,
     )
+
+
+def _enqueue_rpa_async(proceso_id):
+    app = current_app._get_current_object()
+
+    def _run():
+        with app.app_context():
+            try:
+                queue = get_queue()
+                queue.enqueue("app.tasks.process_rpa_job", proceso_id)
+            except Exception:
+                proceso = Proceso.query.get(proceso_id)
+                if not proceso:
+                    return
+                proceso.estado = "error"
+                proceso.resultado = None
+                proceso.pdf_data = None
+                proceso.pdf_filename = None
+                proceso.error_message = "No se pudo encolar el proceso."
+                db.session.commit()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 @main.route("/settings", methods=["GET", "POST"])

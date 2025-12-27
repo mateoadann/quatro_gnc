@@ -1,0 +1,93 @@
+{% for proceso in procesos %}
+<tr>
+  <td>{{ proceso.patente }}</td>
+  <td>
+    <span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span>
+  </td>
+  <td>{{ proceso.resultado or "-" }}</td>
+  <td>
+    {% if proceso.error_message %}
+      <span title="{{ proceso.error_message }}">
+        {{ proceso.error_message[:80] }}{% if proceso.error_message|length > 80 %}...{% endif %}
+      </span>
+    {% elif proceso.id in (stale_ids or []) %}
+      <span class="muted">Sin actividad. Reintentar.</span>
+    {% else %}
+      -
+    {% endif %}
+  </td>
+  <td>
+    {% if proceso.pdf_filename %}
+    <a
+      class="ghost-btn icon-btn"
+      href="{{ url_for('main.rpa_enargas_preview', proceso_id=proceso.id) }}"
+      target="_blank"
+      rel="noopener"
+      aria-label="Previsualizar"
+      title="Previsualizar"
+    >
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path
+          d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V7h3.5L14 3.5zM8 11h8v2H8v-2zm0 4h8v2H8v-2z"
+          fill="currentColor"
+        />
+      </svg>
+    </a>
+    <a
+      class="ghost-btn icon-btn"
+      href="{{ url_for('main.rpa_enargas_pdf', proceso_id=proceso.id) }}"
+      aria-label="Descargar"
+      title="Descargar"
+    >
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path
+          d="M12 3a1 1 0 0 1 1 1v8.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L11 12.6V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"
+          fill="currentColor"
+        />
+      </svg>
+    </a>
+    {% else %}
+    <button class="ghost-btn icon-btn" type="button" disabled aria-label="Previsualizar">
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path
+          d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V7h3.5L14 3.5zM8 11h8v2H8v-2zm0 4h8v2H8v-2z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
+    <button class="ghost-btn icon-btn" type="button" disabled aria-label="Descargar">
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path
+          d="M12 3a1 1 0 0 1 1 1v8.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L11 12.6V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
+    {% endif %}
+
+    {% if proceso.estado == 'error'
+      or proceso.resultado == 'Sesión Activa'
+      or proceso.id in (stale_ids or []) %}
+    <form
+      class="inline-form"
+      method="post"
+      action="{{ url_for('main.rpa_enargas_retry', proceso_id=proceso.id) }}"
+    >
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <button class="ghost-btn icon-btn" type="submit" aria-label="Reintentar" title="Reintentar">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path
+            d="M12 5a7 7 0 1 1-6.3 4H3l3.5-3.5L10 9H7.6A5 5 0 1 0 12 7a1 1 0 1 1 0-2z"
+            fill="currentColor"
+          />
+        </svg>
+      </button>
+    </form>
+    {% endif %}
+  </td>
+</tr>
+{% else %}
+<tr>
+  <td colspan="5" class="muted">Sin consultas aun.</td>
+</tr>
+{% endfor %}

@@ -8,29 +8,60 @@
   </div>
 </section>
 
-<section class="grid">
+<section class="grid two-col">
   <div class="card">
     <h2>Nueva consulta</h2>
     <form class="form-grid" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <label>
-        Patente
-        <input
-          type="text"
-          name="patente"
-          placeholder="AB123CD"
-          pattern="^([A-Za-z]{3}[0-9]{3}|[A-Za-z]{2}[0-9]{3}[A-Za-z]{2})$"
-          title="Formato permitido: AAA123 o AA123AA"
-          data-uppercase="true"
-          required
-        />
-      </label>
-      <button class="primary-btn" type="submit">Crear proceso</button>
-      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p>
+      <div class="form-row">
+        <label class="form-field">
+          Patente
+          <input
+            type="text"
+            name="patente"
+            placeholder="AB123CD"
+            pattern="^([A-Za-z]{3}[- ]?[0-9]{3}|[A-Za-z]{2}[- ]?[0-9]{3}[- ]?[A-Za-z]{2})$"
+            title="Formato permitido: AAA123 o AA123AA (con o sin guiones/espacios)"
+            data-uppercase="true"
+            data-strip="alnum"
+            required
+          />
+        </label>
+        <div class="form-actions">
+          <button class="primary-btn" type="submit">Crear proceso</button>
+        </div>
+      </div>
+      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA (se corrigen guiones/espacios).</p>
     </form>
   </div>
 
   <div class="card">
+    <h2>Guia rapida</h2>
+    <div class="helper-block">
+      <h3>Estados</h3>
+      <ul>
+        <li><strong>En proceso:</strong> el RPA esta ejecutando.</li>
+        <li><strong>Completado:</strong> termino la consulta.</li>
+        <li><strong>Error:</strong> fallo tecnico, reintentar.</li>
+      </ul>
+      <h3>Resultados</h3>
+      <ul>
+        <li><strong>Renovación de Oblea:</strong> apto para renovar.</li>
+        <li><strong>Prueba Hidraulica:</strong> requiere prueba previa.</li>
+        <li><strong>Patente NO registrada:</strong> no figura en ENARGAS.</li>
+        <li><strong>Sesión Activa:</strong> esperar y reintentar.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="grid stack">
+  <div
+    class="card"
+    data-auto-refresh="{{ 'true' if has_pending else 'false' }}"
+    data-refresh-interval="5000"
+    data-refresh-url="{{ url_for('main.rpa_enargas_table') }}"
+  >
     <h2>Consultas recientes</h2>
     <table>
       <thead>
@@ -38,30 +69,12 @@
           <th>Patente</th>
           <th>Estado</th>
           <th>Resultado</th>
+          <th>Detalle</th>
           <th>Acciones</th>
         </tr>
       </thead>
-      <tbody>
-        {% for proceso in procesos %}
-        <tr>
-          <td>{{ proceso.patente }}</td>
-          <td><span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span></td>
-          <td>{{ proceso.resultado or "-" }}</td>
-          <td>
-            {% if proceso.pdf_data %}
-            <a class="ghost-btn" href="{{ url_for('main.rpa_enargas_preview', proceso_id=proceso.id) }}" target="_blank" rel="noopener">Previsualizar</a>
-            <a class="ghost-btn" href="{{ url_for('main.rpa_enargas_pdf', proceso_id=proceso.id) }}">Descargar</a>
-            {% else %}
-            <button class="ghost-btn" type="button" disabled>Previsualizar</button>
-            <button class="ghost-btn" type="button" disabled>Descargar</button>
-            {% endif %}
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="4" class="muted">Sin consultas aun.</td>
-        </tr>
-        {% endfor %}
+      <tbody id="rpa-table-body">
+        {% include "partials/rpa_enargas_rows.html" %}
       </tbody>
     </table>
   </div>

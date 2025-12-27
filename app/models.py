@@ -3,6 +3,8 @@ from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from sqlalchemy.orm import deferred
+
 from .extensions import db
 from .utils import decrypt_value, encrypt_value
 
@@ -74,6 +76,10 @@ class Proceso(db.Model):
     patente = db.Column(db.String(10), nullable=False)
     estado = db.Column(db.String(20), nullable=False, default="en proceso")
     resultado = db.Column(db.String(30), nullable=True)
-    pdf_data = db.Column(db.LargeBinary, nullable=True)
+    pdf_data = deferred(db.Column(db.LargeBinary, nullable=True))
     pdf_filename = db.Column(db.String(255), nullable=True)
+    error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

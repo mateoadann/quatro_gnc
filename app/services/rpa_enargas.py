@@ -18,6 +18,10 @@ class NoOperacionesError(Exception):
     pass
 
 
+class SessionActivaError(Exception):
+    pass
+
+
 def safe_name(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", value).strip("_")
 
@@ -47,7 +51,7 @@ def wait_login_result(page, timeout_ms: int = 8000) -> None:
                         return
                 except Exception:
                     pass
-                raise RuntimeError(
+                raise SessionActivaError(
                     "ENARGAS: detecto 'Ya se encuetra logueado' (bloqueo)."
                 )
         except Exception:
@@ -55,7 +59,7 @@ def wait_login_result(page, timeout_ms: int = 8000) -> None:
 
         page.wait_for_timeout(200)
 
-    raise RuntimeError("No se pudo confirmar el login (timeout).")
+    raise SessionActivaError("No se pudo confirmar el login (timeout).")
 
 
 def login_if_needed(page, enargas_user: str, enargas_password: str) -> None:

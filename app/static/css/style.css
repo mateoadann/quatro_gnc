@@ -152,6 +152,14 @@ body {
   grid-template-columns: minmax(280px, 520px);
 }
 
+.grid.stack {
+  grid-template-columns: 1fr;
+}
+
+.grid.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .card {
   background: var(--card);
   border-radius: var(--radius);
@@ -163,6 +171,21 @@ body {
 
 .card h2 {
   margin: 0 0 12px;
+}
+
+.helper-block h3 {
+  margin: 18px 0 8px;
+  font-size: 1rem;
+}
+
+.helper-block ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.helper-block li {
+  margin-bottom: 6px;
 }
 
 .card-header h1 {
@@ -178,6 +201,29 @@ body {
 .form-grid {
   display: grid;
   gap: 14px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.form-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.form-actions .primary-btn {
+  height: 44px;
+  padding: 0 22px;
 }
 
 label {
@@ -228,6 +274,20 @@ input[type="text"] {
   width: 18px;
   height: 18px;
   display: block;
+}
+
+.icon-btn {
+  padding: 8px;
+}
+
+.icon-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.inline-form {
+  display: inline-flex;
 }
 
 .toggle-password .icon-eye-off {
@@ -340,6 +400,9 @@ td {
 .badge.en-proceso {
   background: rgba(200, 106, 43, 0.2);
   color: #98521f;
+  position: relative;
+  padding-right: 22px;
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .badge.completado {
@@ -350,6 +413,20 @@ td {
 .badge.error {
   background: rgba(188, 60, 60, 0.15);
   color: #a34343;
+}
+
+.badge.en-proceso::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: #b35b22;
+  box-shadow: 0 0 0 0 rgba(179, 91, 34, 0.5);
+  animation: dot-pulse 1.2s ease-in-out infinite;
 }
 
 .muted {
@@ -366,6 +443,10 @@ td {
   border-radius: var(--radius);
   background: #fff4e3;
   border: 1px solid #f5d7b3;
+  max-height: 200px;
+  overflow: hidden;
+  transition: opacity 0.2s ease, transform 0.2s ease, max-height 0.2s ease,
+    padding 0.2s ease, border-width 0.2s ease;
 }
 
 .flash.success {
@@ -376,6 +457,14 @@ td {
 .flash.error {
   background: rgba(188, 60, 60, 0.15);
   border-color: rgba(188, 60, 60, 0.3);
+}
+
+.flash.dismissed {
+  opacity: 0;
+  transform: translateY(-6px);
+  max-height: 0;
+  padding: 0;
+  border-width: 0;
 }
 
 .auth-layout {
@@ -414,6 +503,30 @@ td {
   }
 }
 
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes dot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(179, 91, 34, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(179, 91, 34, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(179, 91, 34, 0);
+  }
+}
+
 @media (max-width: 900px) {
   .topbar {
     flex-direction: column;
@@ -429,10 +542,26 @@ td {
   .auth-layout {
     grid-template-columns: 1fr;
   }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .form-actions .primary-btn {
+    width: 100%;
+  }
+
+  .grid.two-col {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .card {
+    animation: none;
+  }
+  .badge.en-proceso,
+  .badge.en-proceso::after {
     animation: none;
   }
 }
