@@ -253,6 +253,10 @@ body {
   align-items: end;
 }
 
+.form-row--split {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .form-field {
   display: grid;
   gap: 6px;
@@ -275,12 +279,97 @@ label {
   font-weight: 500;
 }
 
+.is-hidden {
+  display: none;
+}
+
 input {
   padding: 12px 14px;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   font-family: inherit;
   font-size: 1rem;
+}
+
+.select-field {
+  position: relative;
+}
+
+.select-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  padding: 12px 42px 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff6ec;
+  font-size: 1rem;
+  font-family: inherit;
+  color: var(--ink);
+}
+
+.select-field::after {
+  content: "";
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 7px solid var(--muted);
+  pointer-events: none;
+}
+
+.select-field select:focus {
+  outline: 2px solid rgba(11, 107, 111, 0.25);
+  border-color: var(--accent);
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(31, 27, 22, 0.35);
+  z-index: 30;
+}
+
+.modal.is-open {
+  display: flex;
+}
+
+.modal-overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+}
+
+.modal-card {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 22px;
+  width: min(420px, 92vw);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(228, 217, 203, 0.8);
+  position: relative;
+  z-index: 1;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.modal-error {
+  color: #a34343;
+  font-size: 0.9rem;
+  margin-top: 8px;
 }
 
 input[type="password"],

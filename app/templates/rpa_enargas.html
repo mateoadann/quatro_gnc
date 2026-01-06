@@ -28,9 +28,26 @@
           />
         </label>
         <div class="form-actions">
-          <button class="primary-btn" type="submit">Crear proceso</button>
+          <button class="primary-btn" type="submit" id="rpa-submit" disabled>Crear proceso</button>
         </div>
       </div>
+      <div class="form-row form-row--split">
+        <label class="form-field">
+          Taller
+          <div class="select-field">
+            <select name="taller_id" id="taller-select" required>
+              <option value="">Selecciona un taller</option>
+              {% for taller in talleres %}
+              <option value="{{ taller.id }}">{{ taller.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </label>
+        <div class="form-actions">
+          <button class="ghost-btn" type="button" id="taller-create-btn">Crear taller</button>
+        </div>
+      </div>
+      <input type="hidden" name="taller_name" id="taller-name" />
       <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p>
     </form>
     <div
@@ -38,6 +55,22 @@
       data-session-status-url="{{ url_for('main.rpa_enargas_session_status') }}"
     >
       <div class="session-status__content" id="rpa-session-status" aria-live="polite"></div>
+    </div>
+    <div class="modal" id="taller-modal" aria-hidden="true">
+      <div class="modal-overlay" data-modal-close></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="taller-modal-title">
+        <h3 id="taller-modal-title">Nuevo taller</h3>
+        <p class="muted">Ingresa el nombre del taller que queres agregar.</p>
+        <label class="form-field">
+          Nombre del taller
+          <input type="text" id="taller-modal-name" placeholder="Ej: Taller Central" />
+        </label>
+        <div class="modal-error is-hidden" id="taller-modal-error">El nombre es obligatorio.</div>
+        <div class="modal-actions">
+          <button class="ghost-btn" type="button" data-modal-close>Cancelar</button>
+          <button class="primary-btn" type="button" id="taller-modal-save">Guardar</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -74,6 +107,7 @@
         <tr>
           <th>Fecha</th>
           <th>Patente</th>
+          <th>Taller</th>
           <th>Estado</th>
           <th>Resultado</th>
           <th>Detalle</th>

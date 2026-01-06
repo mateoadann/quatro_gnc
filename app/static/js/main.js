@@ -112,13 +112,23 @@ const ensureTableRefresh = () => {
   }
 };
 
-const createOptimisticRow = (patente, placeholderId) => {
+const escapeHtml = (value) => {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+};
+
+const createOptimisticRow = (patente, tallerName, placeholderId) => {
   const row = document.createElement("tr");
   row.dataset.placeholderId = placeholderId;
   row.classList.add("pending-row");
   row.innerHTML = `
     <td>${new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
-    <td>${patente}</td>
+    <td>${escapeHtml(patente)}</td>
+    <td>${escapeHtml(tallerName || "-")}</td>
     <td><span class="badge en-proceso">en proceso</span></td>
     <td>-</td>
     <td>-</td>
@@ -139,14 +149,119 @@ const createOptimisticRow = (patente, placeholderId) => {
 };
 
 const rpaForm = document.querySelector("form.form-grid");
+const patenteInput = rpaForm?.querySelector("input[name='patente']");
+const tallerSelect = rpaForm?.querySelector("#taller-select");
+const tallerNewInput = rpaForm?.querySelector("#taller-name");
+const rpaSubmit = rpaForm?.querySelector("#rpa-submit");
+const tallerCreateBtn = document.querySelector("#taller-create-btn");
+const tallerModal = document.querySelector("#taller-modal");
+const tallerModalName = document.querySelector("#taller-modal-name");
+const tallerModalSave = document.querySelector("#taller-modal-save");
+const tallerModalError = document.querySelector("#taller-modal-error");
+
+const updateTallerUI = () => {
+  if (!tallerSelect || !rpaSubmit) {
+    return;
+  }
+  const patenteValue = (patenteInput?.value || "").trim();
+  const hasPatente = patenteValue.length > 0;
+  const hasTaller =
+    (tallerSelect.value && tallerSelect.value !== "new") ||
+    (tallerSelect.value === "new" && (tallerNewInput?.value || "").trim().length > 0);
+  rpaSubmit.disabled = !(hasTaller && hasPatente);
+};
+
+if (tallerSelect) {
+  tallerSelect.addEventListener("change", () => {
+    if (tallerSelect.value !== "new" && tallerNewInput) {
+      tallerNewInput.value = "";
+    }
+    updateTallerUI();
+  });
+}
+if (patenteInput) {
+  patenteInput.addEventListener("input", updateTallerUI);
+}
+updateTallerUI();
+
+const openTallerModal = () => {
+  if (!tallerModal || !tallerModalName) {
+    return;
+  }
+  tallerModal.classList.add("is-open");
+  tallerModal.setAttribute("aria-hidden", "false");
+  if (tallerModalError) {
+    tallerModalError.classList.add("is-hidden");
+  }
+  tallerModalName.value = "";
+  tallerModalName.focus();
+};
+
+const closeTallerModal = () => {
+  if (!tallerModal) {
+    return;
+  }
+  tallerModal.classList.remove("is-open");
+  tallerModal.setAttribute("aria-hidden", "true");
+};
+
+const confirmNewTaller = () => {
+  if (!tallerSelect || !tallerModalName || !tallerNewInput) {
+    return;
+  }
+  const name = tallerModalName.value.trim();
+  if (!name) {
+    if (tallerModalError) {
+      tallerModalError.classList.remove("is-hidden");
+    }
+    tallerModalName.focus();
+    return;
+  }
+  const newValue = "new";
+  let option = Array.from(tallerSelect.options).find(
+    (item) => item.value === newValue
+  );
+  if (!option) {
+    option = new Option(name, newValue, false, false);
+    tallerSelect.add(option);
+  }
+  option.textContent = name;
+  tallerSelect.value = newValue;
+  tallerNewInput.value = name;
+  updateTallerUI();
+  closeTallerModal();
+};
+
+if (tallerCreateBtn) {
+  tallerCreateBtn.addEventListener("click", openTallerModal);
+}
+if (tallerModalSave) {
+  tallerModalSave.addEventListener("click", confirmNewTaller);
+}
+if (tallerModal) {
+  tallerModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-modal-close]")) {
+      closeTallerModal();
+    }
+  });
+}
+
 if (rpaForm) {
   rpaForm.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (rpaSubmit?.disabled) {
+      return;
+    }
     const formData = new FormData(rpaForm);
     const patente = formData.get("patente") || "";
+    let tallerLabel = "-";
+    if (tallerSelect) {
+      const option = tallerSelect.options[tallerSelect.selectedIndex];
+      tallerLabel = option ? option.textContent.trim() : "-";
+    }
     const placeholderId = `pending-${Date.now()}`;
     if (refreshBody) {
-      const row = createOptimisticRow(patente, placeholderId);
+      const row = createOptimisticRow(patente, tallerLabel, placeholderId);
       refreshBody.prepend(row);
     }
 
@@ -176,8 +291,32 @@ if (rpaForm) {
           refreshBody.prepend(newRow);
         }
       }
+      if (tallerSelect && payload.taller_id && payload.taller_nombre) {
+        const newValue = String(payload.taller_id);
+        let option = Array.from(tallerSelect.options).find(
+          (item) => item.value === newValue
+        );
+        if (!option) {
+          option = new Option(payload.taller_nombre, newValue, false, false);
+          tallerSelect.add(option);
+        }
+        tallerSelect.value = newValue;
+        const tempOption = Array.from(tallerSelect.options).find(
+          (item) => item.value === "new"
+        );
+        if (tempOption) {
+          tempOption.remove();
+        }
+        if (tallerNewInput) {
+          tallerNewInput.value = "";
+        }
+      }
       ensureTableRefresh();
-      rpaForm.reset();
+      if (patenteInput) {
+        patenteInput.value = "";
+        patenteInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+      updateTallerUI();
     } catch (error) {
       const placeholder = refreshBody?.querySelector(
         `[data-placeholder-id="${placeholderId}"]`
@@ -201,15 +340,15 @@ if (refreshBody) {
     const row = form.closest("tr");
     if (row) {
       row.classList.add("pending-row");
-      const statusCell = row.querySelector("td:nth-child(3)");
+      const statusCell = row.querySelector("td:nth-child(4)");
       if (statusCell) {
         statusCell.innerHTML = '<span class="badge en-proceso">en proceso</span>';
       }
-      const resultCell = row.querySelector("td:nth-child(4)");
+      const resultCell = row.querySelector("td:nth-child(5)");
       if (resultCell) {
         resultCell.textContent = "-";
       }
-      const detailCell = row.querySelector("td:nth-child(5)");
+      const detailCell = row.querySelector("td:nth-child(6)");
       if (detailCell) {
         detailCell.textContent = "-";
       }

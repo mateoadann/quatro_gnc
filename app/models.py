@@ -23,6 +23,7 @@ class User(UserMixin, db.Model):
     enargas_credentials = db.relationship(
         "EnargasCredentials", backref="user", uselist=False, lazy=True
     )
+    talleres = db.relationship("Taller", backref="user", lazy=True)
 
     def set_password(self, value):
         self.password_hash = generate_password_hash(value)
@@ -73,6 +74,7 @@ class Proceso(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    taller_id = db.Column(db.Integer, db.ForeignKey("taller.id"), nullable=True)
     patente = db.Column(db.String(10), nullable=False)
     estado = db.Column(db.String(20), nullable=False, default="en proceso")
     resultado = db.Column(db.String(30), nullable=True)
@@ -82,4 +84,19 @@ class Proceso(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class Taller(db.Model):
+    __tablename__ = "taller"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    nombre = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    procesos = db.relationship("Proceso", backref="taller", lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "nombre", name="uq_taller_user_nombre"),
     )

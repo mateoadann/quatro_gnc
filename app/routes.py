@@ -18,7 +18,7 @@ from flask import current_app
 from flask_login import current_user, login_required
 
 from .extensions import db
-from .models import EnargasCredentials, ImgToPdfJob, Proceso
+from .models import EnargasCredentials, ImgToPdfJob, Proceso, Taller
 from .queue import get_queue
 from .services.rpa_session import get_status as get_rpa_session_status
 
@@ -109,8 +109,68 @@ def rpa_enargas():
             flash(message, "error")
             return redirect(url_for("main.settings"))
 
+        taller_id = request.form.get("taller_id", "")
+        taller_name = request.form.get("taller_name", "").strip()
+
+        existing = (
+            Proceso.query.filter_by(user_id=current_user.id, patente=patente)
+            .filter(Proceso.taller_id.isnot(None))
+            .order_by(Proceso.created_at.desc())
+            .first()
+        )
+        selected_taller = None
+        taller_created = False
+        if existing and existing.taller_id:
+            selected_taller = Taller.query.filter_by(
+                id=existing.taller_id, user_id=current_user.id
+            ).first()
+        if existing and existing.taller_id and not selected_taller:
+            existing = None
+
+        if not existing:
+            if not taller_id:
+                message = "Selecciona o crea un taller antes de continuar."
+                if _wants_json():
+                    return jsonify({"error": message}), 400
+                flash(message, "error")
+                return redirect(url_for("main.rpa_enargas"))
+
+            if taller_id == "new":
+                if not taller_name:
+                    message = "Ingresa el nombre del taller."
+                    if _wants_json():
+                        return jsonify({"error": message}), 400
+                    flash(message, "error")
+                    return redirect(url_for("main.rpa_enargas"))
+                selected_taller = Taller.query.filter_by(
+                    user_id=current_user.id, nombre=taller_name
+                ).first()
+                if not selected_taller:
+                    selected_taller = Taller(
+                        user_id=current_user.id,
+                        nombre=taller_name,
+                    )
+                    db.session.add(selected_taller)
+                    db.session.flush()
+                    taller_created = True
+            else:
+                try:
+                    selected_taller = Taller.query.filter_by(
+                        id=int(taller_id), user_id=current_user.id
+                    ).first()
+                except ValueError:
+                    selected_taller = None
+
+                if not selected_taller:
+                    message = "El taller seleccionado no es valido."
+                    if _wants_json():
+                        return jsonify({"error": message}), 400
+                    flash(message, "error")
+                    return redirect(url_for("main.rpa_enargas"))
+
         proceso = Proceso(
             user_id=current_user.id,
+            taller_id=selected_taller.id if selected_taller else None,
             patente=patente,
             estado="en proceso",
         )
@@ -123,6 +183,9 @@ def rpa_enargas():
                 {
                     "proceso_id": proceso.id,
                     "row_html": _render_proceso_row(proceso),
+                    "taller_id": selected_taller.id if selected_taller else None,
+                    "taller_nombre": selected_taller.nombre if selected_taller else None,
+                    "taller_created": taller_created,
                 }
             )
         flash("Proceso en cola. Se actualizara cuando finalice.", "success")
@@ -139,6 +202,11 @@ def rpa_enargas():
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=10)
+    talleres = (
+        Taller.query.filter_by(user_id=current_user.id)
+        .order_by(Taller.nombre.asc())
+        .all()
+    )
     return render_template(
         "rpa_enargas.html",
         procesos=procesos,
@@ -146,6 +214,7 @@ def rpa_enargas():
         stale_ids=stale_ids,
         page=page,
         total_pages=total_pages,
+        talleres=talleres,
     )
 
 
