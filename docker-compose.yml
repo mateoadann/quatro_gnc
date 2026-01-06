@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "5001:5000"
+    volumes:
+      - ./debug:/app/debug
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc
       - REDIS_URL=redis://redis:6379/0
@@ -26,6 +28,8 @@ services:
   worker:
     build: .
     command: ["python", "worker.py"]
+    volumes:
+      - ./debug:/app/debug
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc
       - REDIS_URL=redis://redis:6379/0

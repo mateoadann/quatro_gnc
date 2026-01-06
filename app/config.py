@@ -11,6 +11,10 @@ class Config:
         "DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        "pool_pre_ping": True,
+        "pool_recycle": 300,
+    }
 
     KEYCLOAK_ENABLED = os.getenv("KEYCLOAK_ENABLED", "false").lower() == "true"
     KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "")
@@ -42,3 +46,4 @@ class Config:
 
     REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
     RQ_DEFAULT_TIMEOUT = int(os.getenv("RQ_DEFAULT_TIMEOUT", "900"))
+    RPA_PER_PAGE = int(os.getenv("RPA_PER_PAGE", "10"))

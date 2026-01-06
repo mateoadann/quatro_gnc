@@ -1,5 +1,6 @@
 {% for proceso in procesos %}
-<tr>
+<tr data-proceso-id="{{ proceso.id }}">
+  <td>{{ proceso.created_at.strftime("%d/%m/%Y %H:%M") if proceso.created_at else "-" }}</td>
   <td>{{ proceso.patente }}</td>
   <td>
     <span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span>
@@ -88,6 +89,6 @@
 </tr>
 {% else %}
 <tr>
-  <td colspan="5" class="muted">Sin consultas aun.</td>
+  <td colspan="6" class="muted">Sin consultas aun.</td>
 </tr>
 {% endfor %}

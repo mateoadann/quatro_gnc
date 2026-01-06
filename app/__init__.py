@@ -1,3 +1,6 @@
+import logging
+import os
+
 import click
 from flask import Flask
 
@@ -7,6 +10,8 @@ from .models import EnargasCredentials, ImgToPdfJob, Proceso, RpaEnargasJob, Use
 
 
 def create_app():
+    _configure_logging()
+
     app = Flask(__name__)
     app.config.from_object(Config)
 
@@ -37,6 +42,22 @@ def create_app():
         click.echo("Database seeded")
 
     return app
+
+
+def _configure_logging():
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+
+    root = logging.getLogger()
+    root.setLevel(level)
+
+    if not root.handlers:
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s: %(message)s"
+        )
+        handler.setFormatter(formatter)
+        root.addHandler(handler)
 
 
 def _register_keycloak(app):

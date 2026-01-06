@@ -21,7 +21,7 @@
             name="patente"
             placeholder="AB123CD"
             pattern="^([A-Za-z]{3}[- ]?[0-9]{3}|[A-Za-z]{2}[- ]?[0-9]{3}[- ]?[A-Za-z]{2})$"
-            title="Formato permitido: AAA123 o AA123AA (con o sin guiones/espacios)"
+            title="Formato permitido: AAA123 o AA123AA"
             data-uppercase="true"
             data-strip="alnum"
             required
@@ -31,8 +31,14 @@
           <button class="primary-btn" type="submit">Crear proceso</button>
         </div>
       </div>
-      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA (se corrigen guiones/espacios).</p>
+      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p>
     </form>
+    <div
+      class="session-status"
+      data-session-status-url="{{ url_for('main.rpa_enargas_session_status') }}"
+    >
+      <div class="session-status__content" id="rpa-session-status" aria-live="polite"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -60,12 +66,13 @@
     class="card"
     data-auto-refresh="{{ 'true' if has_pending else 'false' }}"
     data-refresh-interval="5000"
-    data-refresh-url="{{ url_for('main.rpa_enargas_table') }}"
+    data-refresh-url="{{ url_for('main.rpa_enargas_table', page=page) }}"
   >
     <h2>Consultas recientes</h2>
     <table>
       <thead>
         <tr>
+          <th>Fecha</th>
           <th>Patente</th>
           <th>Estado</th>
           <th>Resultado</th>
@@ -77,6 +84,9 @@
         {% include "partials/rpa_enargas_rows.html" %}
       </tbody>
     </table>
+    <div id="rpa-pagination" class="table-footer">
+      {% include "partials/rpa_pagination.html" %}
+    </div>
   </div>
 </section>
 {% endblock %}
