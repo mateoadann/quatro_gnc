@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import logging
 import os
@@ -6,7 +7,7 @@ import threading
 import time
 from datetime import datetime
 
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 from .rpa_session import mark_active, mark_cooldown, mark_running
 
@@ -23,6 +24,11 @@ logger = logging.getLogger(__name__)
 
 DATE_CELL_RE = re.compile(r"(\d{2})/(\d{2})/(\d{4})")
 
+_loop: asyncio.AbstractEventLoop | None = None
+_loop_thread: threading.Thread | None = None
+_loop_ready = threading.Event()
+_session_lock: asyncio.Lock | None = None
+
 
 class NoOperacionesError(Exception):
     pass
@@ -32,41 +38,73 @@ class SessionActivaError(Exception):
     pass
 
 
+def _ensure_loop() -> asyncio.AbstractEventLoop:
+    global _loop, _loop_thread, _session_lock
+    if _loop and _loop.is_running():
+        return _loop
+
+    _loop = asyncio.new_event_loop()
+
+    def _run_loop() -> None:
+        asyncio.set_event_loop(_loop)
+        global _session_lock
+        _session_lock = asyncio.Lock()
+        _loop_ready.set()
+        _loop.run_forever()
+
+    _loop_thread = threading.Thread(target=_run_loop, daemon=True)
+    _loop_thread.start()
+    _loop_ready.wait()
+    return _loop
+
+
+def _run_on_loop(coro):
+    loop = _ensure_loop()
+    future = asyncio.run_coroutine_threadsafe(coro, loop)
+    return future.result()
+
+
+def _get_session_lock() -> asyncio.Lock:
+    if _session_lock is None:
+        raise RuntimeError("RPA loop no inicializado")
+    return _session_lock
+
+
 def safe_name(value: str) -> str:
     return re.sub(r"[^a-zA-Z0-9._-]+", "_", value).strip("_")
 
 
-def _capture_debug(page, patente: str) -> None:
+async def _capture_debug(page, patente: str) -> None:
     if os.getenv("RPA_DEBUG", "false").lower() != "true":
         return
     try:
         os.makedirs(RPA_DEBUG_DIR, exist_ok=True)
         filename = f"enargas_{safe_name(patente)}.png"
         screenshot_path = os.path.join(RPA_DEBUG_DIR, filename)
-        page.screenshot(path=screenshot_path, full_page=True)
+        await page.screenshot(path=screenshot_path, full_page=True)
         logger.error("Screenshot guardado en %s", screenshot_path)
     except Exception:
         logger.exception("RPA: no se pudo guardar screenshot")
 
     try:
         container = page.locator("#div-detalle-previo")
-        if container.count() == 0:
+        if await container.count() == 0:
             logger.error("HTML #div-detalle-previo: no encontrado")
             return
-        html = container.first.inner_html(timeout=2000)
+        html = await container.first.inner_html(timeout=2000)
         logger.error("HTML #div-detalle-previo:\n%s", html)
     except Exception:
         logger.exception("RPA: no se pudo leer HTML de #div-detalle-previo")
 
 
-def _is_visible(locator) -> bool:
+async def _is_visible(locator) -> bool:
     try:
-        return locator.first.is_visible()
+        return await locator.first.is_visible()
     except Exception:
         return False
 
 
-def wait_login_result(page, timeout_ms: int = 10000) -> None:
+async def wait_login_result(page, timeout_ms: int = 10000) -> None:
     consultas_link = page.get_by_role("link", name=re.compile(r"Consultas", re.I))
     active_session_text = page.get_by_text(
         re.compile(r"ya\s+se\s+encu?entra\s+logueado", re.I)
@@ -77,58 +115,58 @@ def wait_login_result(page, timeout_ms: int = 10000) -> None:
 
     end = time.monotonic() + (timeout_ms / 1000)
     while time.monotonic() < end:
-        if _is_visible(consultas_link):
+        if await _is_visible(consultas_link):
             return
-        if _is_visible(active_session_text):
+        if await _is_visible(active_session_text):
             raise SessionActivaError("ENARGAS: detecto 'Ya se encuentra logueado'.")
-        if _is_visible(invalid_alert):
+        if await _is_visible(invalid_alert):
             raise RuntimeError("ENARGAS: credenciales invalidas.")
-        page.wait_for_timeout(200)
+        await page.wait_for_timeout(200)
 
     raise SessionActivaError("ENARGAS: no se pudo confirmar el login (timeout).")
 
 
-def login_if_needed(page, enargas_user: str, enargas_password: str) -> None:
+async def login_if_needed(page, enargas_user: str, enargas_password: str) -> None:
     try:
         user_input = page.get_by_label("Usuario *")
     except Exception:
         return
 
-    if user_input.count() == 0 or not _is_visible(user_input):
+    if await user_input.count() == 0 or not await _is_visible(user_input):
         return
 
-    user_input.fill(enargas_user)
-    page.get_by_placeholder("Contraseña").fill(enargas_password)
-    page.get_by_role("button", name=re.compile(r"Ingresar", re.I)).click()
-    wait_login_result(page, timeout_ms=10000)
+    await user_input.fill(enargas_user)
+    await page.get_by_placeholder("Contraseña").fill(enargas_password)
+    await page.get_by_role("button", name=re.compile(r"Ingresar", re.I)).click()
+    await wait_login_result(page, timeout_ms=10000)
 
 
-def _is_logged_in(page) -> bool:
+async def _is_logged_in(page) -> bool:
     consultas_link = page.get_by_role("link", name=re.compile(r"Consultas", re.I))
-    return _is_visible(consultas_link)
+    return await _is_visible(consultas_link)
 
 
-def ensure_consulta_flow(page, enargas_user: str, enargas_password: str) -> None:
+async def ensure_consulta_flow(page, enargas_user: str, enargas_password: str) -> None:
     """
     Deja la pagina lista para consultar por Dominio.
     """
     logger.info("RPA: navegando a Consultas/Operaciones PEC")
-    if not _is_logged_in(page):
-        page.goto(ENARGAS_LOGIN_URL)
-        login_if_needed(page, enargas_user, enargas_password)
+    if not await _is_logged_in(page):
+        await page.goto(ENARGAS_LOGIN_URL)
+        await login_if_needed(page, enargas_user, enargas_password)
 
-    page.get_by_role("link", name=re.compile(r"Consultas", re.I)).click()
-    page.get_by_role("link", name=re.compile(r"Operaciones PEC", re.I)).click()
+    await page.get_by_role("link", name=re.compile(r"Consultas", re.I)).click()
+    await page.get_by_role("link", name=re.compile(r"Operaciones PEC", re.I)).click()
 
     try:
         selector = page.get_by_label("Consulta por *")
-        if selector.is_visible():
-            selector.select_option("Dominio")
+        if await selector.is_visible():
+            await selector.select_option("Dominio")
     except Exception:
         pass
 
 
-def abort_if_no_operaciones(scope, timeout_ms: int = 15000) -> None:
+async def abort_if_no_operaciones(scope, timeout_ms: int = 15000) -> None:
     """
     Espera resultado dentro de #div-detalle-previo.
     - Si detecta 'No se registran operaciones' => NoOperacionesError
@@ -146,10 +184,10 @@ def abort_if_no_operaciones(scope, timeout_ms: int = 15000) -> None:
     detail = ""
     while time.monotonic() < end:
         try:
-            detail = container.inner_text()
+            detail = await container.inner_text()
         except Exception:
             try:
-                detail = page.inner_text("body")
+                detail = await page.inner_text("body")
             except Exception:
                 detail = ""
 
@@ -177,7 +215,7 @@ def abort_if_no_operaciones(scope, timeout_ms: int = 15000) -> None:
         except Exception:
             pass
 
-        page.wait_for_timeout(200)
+        await page.wait_for_timeout(200)
 
     if not detail:
         detail = "<no se pudo leer inner_text del container>"
@@ -187,28 +225,28 @@ def abort_if_no_operaciones(scope, timeout_ms: int = 15000) -> None:
     )
 
 
-def open_latest_movement_popup(page):
+async def open_latest_movement_popup(page):
     container = page.locator("#div-detalle-previo")
     try:
-        container.wait_for(state="visible", timeout=15000)
+        await container.wait_for(state="visible", timeout=15000)
     except Exception:
         pass
     try:
-        container.click()
+        await container.click()
     except Exception:
         pass
 
     rows = container.locator("tbody tr")
     end = time.monotonic() + 12
     while time.monotonic() < end:
-        if rows.count() > 0:
+        if await rows.count() > 0:
             break
-        page.wait_for_timeout(200)
+        await page.wait_for_timeout(200)
 
-    if rows.count() == 0:
+    if await rows.count() == 0:
         rows = container.locator("tr")
 
-    count = rows.count()
+    count = await rows.count()
     logger.info("RPA: movimientos encontrados=%s", count)
 
     best_i = None
@@ -216,10 +254,10 @@ def open_latest_movement_popup(page):
 
     for i in range(count):
         row = rows.nth(i)
-        if row.locator("button, [role='button']").count() == 0:
+        if await row.locator("button, [role='button']").count() == 0:
             continue
 
-        row_text = row.inner_text().strip()
+        row_text = (await row.inner_text()).strip()
         match = DATE_CELL_RE.search(row_text)
         if not match:
             continue
@@ -238,12 +276,12 @@ def open_latest_movement_popup(page):
 
     target_row = rows.nth(best_i)
     btn = target_row.locator("button, [role='button']").first
-    btn.scroll_into_view_if_needed()
+    await btn.scroll_into_view_if_needed()
 
-    with page.expect_popup() as p1_info:
-        btn.click()
+    async with page.expect_popup() as p1_info:
+        await btn.click()
 
-    return p1_info.value
+    return await p1_info.value
 
 
 class EnargasSession:
@@ -255,73 +293,72 @@ class EnargasSession:
         self.headless = headless
         self.last_used = time.monotonic()
 
-    def begin_job(self) -> None:
+    async def begin_job(self) -> None:
         self.last_used = time.monotonic()
-        _cancel_idle_timer()
+        await _cancel_idle_timer()
         mark_running()
 
-    def end_job(self) -> None:
+    async def end_job(self) -> None:
         self.last_used = time.monotonic()
         mark_active(RPA_SESSION_IDLE_SECONDS)
-        _schedule_idle_close(self)
+        await _schedule_idle_close(self)
 
     def is_idle(self) -> bool:
         return (time.monotonic() - self.last_used) > RPA_SESSION_IDLE_SECONDS
 
-    def logout(self) -> None:
+    async def logout(self) -> None:
         try:
-            self.page.get_by_role("link", name=re.compile(r"Salir", re.I)).click()
-            self.page.wait_for_timeout(1000)
+            await self.page.get_by_role("link", name=re.compile(r"Salir", re.I)).click()
+            await self.page.wait_for_timeout(1000)
         except Exception:
             pass
 
-    def close(self) -> None:
+    async def close(self) -> None:
         try:
-            self.context.close()
+            await self.context.close()
         except Exception:
             pass
         try:
-            self.browser.close()
+            await self.browser.close()
         except Exception:
             pass
         try:
-            self.playwright.stop()
+            await self.playwright.stop()
         except Exception:
             pass
 
 
-_session_lock = threading.Lock()
 _session: EnargasSession | None = None
 _cooldown_until = 0.0
-_idle_timer: threading.Timer | None = None
+_idle_task: asyncio.Task | None = None
 
 
-def _cancel_idle_timer() -> None:
-    global _idle_timer
-    if _idle_timer is None:
+async def _cancel_idle_timer() -> None:
+    global _idle_task
+    if _idle_task is None:
         return
+    _idle_task.cancel()
     try:
-        _idle_timer.cancel()
-    except Exception:
+        await _idle_task
+    except asyncio.CancelledError:
         pass
-    _idle_timer = None
+    _idle_task = None
 
 
-def _schedule_idle_close(session: EnargasSession) -> None:
+async def _schedule_idle_close(session: EnargasSession) -> None:
     if RPA_SESSION_IDLE_SECONDS <= 0:
         return
 
-    def _close_if_current() -> None:
-        with _session_lock:
+    async def _close_if_current() -> None:
+        await asyncio.sleep(RPA_SESSION_IDLE_SECONDS)
+        async with _get_session_lock():
             if _session is not session:
                 return
-        _close_session(session, "inactividad")
+        await _close_session(session, "inactividad")
 
-    global _idle_timer
-    _cancel_idle_timer()
-    _idle_timer = threading.Timer(RPA_SESSION_IDLE_SECONDS, _close_if_current)
-    _idle_timer.daemon = True
-    _idle_timer.start()
+    global _idle_task
+    await _cancel_idle_timer()
+    _idle_task = asyncio.create_task(_close_if_current())
 
 
 def _set_cooldown() -> None:
@@ -334,12 +371,12 @@ def _set_cooldown() -> None:
     mark_cooldown(RPA_SESSION_COOLDOWN_SECONDS)
 
 
-def _wait_for_cooldown() -> None:
+async def _wait_for_cooldown() -> None:
     remaining = _cooldown_until - time.monotonic()
     if remaining <= 0:
         return
     logger.info("RPA: cooldown activo, esperando %.1fs", remaining)
-    time.sleep(remaining)
+    await asyncio.sleep(remaining)
 
 
 def _set_session(value: EnargasSession | None) -> None:
@@ -347,49 +384,119 @@ def _set_session(value: EnargasSession | None) -> None:
     _session = value
 
 
-def _close_session(session: EnargasSession, reason: str) -> None:
+async def _close_session(session: EnargasSession, reason: str) -> None:
     logger.info("RPA: cerrando sesion (%s)", reason)
     try:
-        session.logout()
+        await session.logout()
     except Exception:
         pass
-    session.close()
+    await session.close()
     _set_session(None)
     _set_cooldown()
-    _cancel_idle_timer()
+    await _cancel_idle_timer()
 
 
-def _get_or_create_session(headless: bool) -> EnargasSession:
-    with _session_lock:
+async def _get_or_create_session(headless: bool) -> EnargasSession:
+    async with _get_session_lock():
         session = _session
 
-    if session and session.page and not session.page.is_closed():
-        if session.headless != headless:
-            _close_session(session, "cambio de headless")
-        elif session.is_idle():
-            _close_session(session, "inactividad")
-        else:
-            logger.info("RPA: reutilizando sesion existente")
-            return session
+        if session and session.page and not session.page.is_closed():
+            if session.headless != headless:
+                await _close_session(session, "cambio de headless")
+            elif session.is_idle():
+                await _close_session(session, "inactividad")
+            else:
+                logger.info("RPA: reutilizando sesion existente")
+                return session
 
-    _wait_for_cooldown()
+        await _wait_for_cooldown()
 
-    logger.info("RPA: creando nueva sesion (headless=%s)", headless)
-    playwright = sync_playwright().start()
-    browser = playwright.chromium.launch(headless=headless)
-    context = browser.new_context()
-    context.add_init_script(
-        """
-        window.print = () => {};
-        window.close = () => {};
-        """
-    )
-    page = context.new_page()
-    session = EnargasSession(playwright, browser, context, page, headless)
-    with _session_lock:
+        logger.info("RPA: creando nueva sesion (headless=%s)", headless)
+        playwright = await async_playwright().start()
+        browser = await playwright.chromium.launch(headless=headless)
+        context = await browser.new_context()
+        await context.add_init_script(
+            """
+            window.print = () => {};
+            window.close = () => {};
+            """
+        )
+        page = await context.new_page()
+        session = EnargasSession(playwright, browser, context, page, headless)
         _set_session(session)
-    mark_active(RPA_SESSION_IDLE_SECONDS)
-    return session
+        mark_active(RPA_SESSION_IDLE_SECONDS)
+        return session
+
+
+async def _run_rpa_async(
+    patente: str,
+    enargas_user: str,
+    enargas_password: str,
+    headless: bool,
+):
+    session = await _get_or_create_session(headless)
+    await session.begin_job()
+
+    page = session.page
+    try:
+        logger.info("RPA: inicio consulta patente=%s", patente)
+        await ensure_consulta_flow(page, enargas_user, enargas_password)
+        await page.get_by_role("textbox", name="Dominio *").fill(patente)
+        await page.get_by_role("button", name="Consultar").click()
+        logger.info("RPA: consulta enviada patente=%s", patente)
+
+        await abort_if_no_operaciones(page, timeout_ms=15000)
+        await _capture_debug(page, patente)
+
+        page1 = await open_latest_movement_popup(page)
+
+        async with page1.expect_popup() as p2_info:
+            await page1.locator("#imprimir").click()
+        page2 = await p2_info.value
+
+        await page2.wait_for_load_state("domcontentloaded")
+        await page2.wait_for_timeout(1500)
+
+        cdp = await session.context.new_cdp_session(page2)
+        result = await cdp.send(
+            "Page.printToPDF",
+            {
+                "printBackground": True,
+                "preferCSSPageSize": True,
+            },
+        )
+        pdf_bytes = base64.b64decode(result["data"])
+        logger.info("RPA: PDF generado patente=%s bytes=%s", patente, len(pdf_bytes))
+
+        await page2.close()
+        await page1.close()
+
+        return {
+            "pdf_data": pdf_bytes,
+            "pdf_filename": safe_name(f"{patente}_ENARGAS.pdf"),
+            "resultado": None,
+        }
+    except SessionActivaError:
+        await _capture_debug(page, patente)
+        await _close_session(session, "sesion activa detectada")
+        logger.info("RPA: sesion activa detectada")
+        raise
+    except NoOperacionesError:
+        await _capture_debug(page, patente)
+        logger.info("RPA: patente sin operaciones registradas")
+        raise
+    except Exception:
+        await _capture_debug(page, patente)
+        await _close_session(session, "error en ejecucion")
+        logger.exception("RPA: error en consulta patente=%s", patente)
+        raise
+    finally:
+        try:
+            async with _get_session_lock():
+                if _session is session:
+                    await session.end_job()
+        except Exception:
+            pass
 
 
 def run_rpa(
@@ -400,65 +507,4 @@ def run_rpa(
 ):
     if headless is None:
         headless = RPA_HEADLESS
-
-    session = _get_or_create_session(headless)
-    session.begin_job()
-
-    try:
-        page = session.page
-        logger.info("RPA: inicio consulta patente=%s", patente)
-        ensure_consulta_flow(page, enargas_user, enargas_password)
-        page.get_by_role("textbox", name="Dominio *").fill(patente)
-        page.get_by_role("button", name="Consultar").click()
-        logger.info("RPA: consulta enviada patente=%s", patente)
-
-        abort_if_no_operaciones(page, timeout_ms=15000)
-        _capture_debug(page, patente)
-
-        page1 = open_latest_movement_popup(page)
-
-        with page1.expect_popup() as p2_info:
-            page1.locator("#imprimir").click()
-        page2 = p2_info.value
-
-        page2.wait_for_load_state("domcontentloaded")
-        page2.wait_for_timeout(1500)
-
-        cdp = session.context.new_cdp_session(page2)
-        result = cdp.send(
-            "Page.printToPDF",
-            {
-                "printBackground": True,
-                "preferCSSPageSize": True,
-            },
-        )
-        pdf_bytes = base64.b64decode(result["data"])
-        logger.info("RPA: PDF generado patente=%s bytes=%s", patente, len(pdf_bytes))
-
-        page2.close()
-        page1.close()
-
-        return {
-            "pdf_data": pdf_bytes,
-            "pdf_filename": safe_name(f"{patente}_ENARGAS.pdf"),
-            "resultado": None,
-        }
-    except SessionActivaError:
-        _capture_debug(page, patente)
-        _close_session(session, "sesion activa detectada")
-        logger.info("RPA: sesion activa detectada")
-        raise
-    except NoOperacionesError:
-        _capture_debug(page, patente)
-        logger.info("RPA: patente sin operaciones registradas")
-        raise
-    except Exception:
-        _capture_debug(page, patente)
-        _close_session(session, "error en ejecucion")
-        logger.exception("RPA: error en consulta patente=%s", patente)
-        raise
-    finally:
-        try:
-            session.end_job()
-        except Exception:
-            pass
+    return _run_on_loop(_run_rpa_async(patente, enargas_user, enargas_password, headless))

@@ -1,9 +1,11 @@
 from . import create_app
 from .extensions import db
 from .models import EnargasCredentials, Proceso
+from .queue import get_queue
 import traceback
 
 from .services.rpa_enargas import NoOperacionesError, SessionActivaError, run_rpa
+from .services.process_pdf_enargas import analyze_pdf_bytes
 
 
 def process_rpa_job(proceso_id: int) -> None:
@@ -36,7 +38,7 @@ def process_rpa_job(proceso_id: int) -> None:
         try:
             result = run_rpa(proceso.patente, credentials.enargas_user, enargas_password)
             proceso.estado = "completado"
-            proceso.resultado = result.get("resultado") or "Renovación de Oblea"
+            proceso.resultado = None
             proceso.pdf_data = result.get("pdf_data")
             proceso.pdf_filename = result.get("pdf_filename")
             proceso.error_message = None
@@ -57,6 +59,33 @@ def process_rpa_job(proceso_id: int) -> None:
             proceso.resultado = None
             proceso.pdf_data = None
             proceso.pdf_filename = None
+            proceso.error_message = _format_error()
+
+        db.session.commit()
+
+        if proceso.estado == "completado" and proceso.pdf_data:
+            queue = get_queue()
+            queue.enqueue("app.tasks.process_pdf_job", proceso.id)
+
+
+def process_pdf_job(proceso_id: int) -> None:
+    app = create_app()
+    with app.app_context():
+        proceso = Proceso.query.get(proceso_id)
+        if not proceso or not proceso.pdf_data:
+            return
+
+        try:
+            fields = analyze_pdf_bytes(proceso.pdf_data)
+            resultado = fields.get("resultado")
+            if resultado:
+                proceso.resultado = resultado
+                proceso.error_message = None
+            else:
+                proceso.resultado = None
+                proceso.error_message = "No se pudo determinar el resultado del PDF."
+        except Exception:
+            proceso.resultado = None
             proceso.error_message = _format_error()
 
         db.session.commit()
