@@ -22,6 +22,9 @@ from .models import EnargasCredentials, ImgToPdfJob, Proceso, Taller
 from .queue import get_queue
 from .services.rpa_session import get_status as get_rpa_session_status
 
+from sqlalchemy import func, or_
+from sqlalchemy.orm import joinedload
+
 
 main = Blueprint("main", __name__)
 
@@ -46,9 +49,11 @@ def _paginate_query(query, page: int, per_page: int):
 
 
 def _paginate_query_no_count(query, page: int, per_page: int):
-    page = max(page, 1)
+    total = query.count()
+    total_pages = max(math.ceil(total / per_page), 1)
+    page = max(1, min(page, total_pages))
     items = query.limit(per_page).offset((page - 1) * per_page).all()
-    return items, page
+    return items, page, total_pages, total
 
 
 def _wants_json() -> bool:
@@ -174,6 +179,8 @@ def rpa_enargas():
             patente=patente,
             estado="en proceso",
         )
+        if selected_taller:
+            proceso.taller = selected_taller
         db.session.add(proceso)
         db.session.commit()
 
@@ -193,7 +200,13 @@ def rpa_enargas():
 
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
-    query = Proceso.query.order_by(Proceso.created_at.desc())
+    filters = _parse_filters(request.args)
+    query = (
+        Proceso.query.outerjoin(Taller)
+        .options(joinedload(Proceso.taller))
+    )
+    query = _apply_filters(query, filters)
+    query = _apply_sort(query, filters)
     procesos, page, total_pages, _total = _paginate_query(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
@@ -207,6 +220,13 @@ def rpa_enargas():
         .order_by(Taller.nombre.asc())
         .all()
     )
+    talleres = (
+        Taller.query.filter_by(user_id=current_user.id)
+        .order_by(Taller.nombre.asc())
+        .all()
+    )
+    filter_params = _build_filter_params(filters)
+    total_count = _total
     return render_template(
         "rpa_enargas.html",
         procesos=procesos,
@@ -214,6 +234,9 @@ def rpa_enargas():
         stale_ids=stale_ids,
         page=page,
         total_pages=total_pages,
+        total_count=total_count,
+        filter_params=filter_params,
+        filters=filters,
         talleres=talleres,
     )
 
@@ -223,8 +246,14 @@ def rpa_enargas():
 def rpa_enargas_table():
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
-    query = Proceso.query.order_by(Proceso.created_at.desc())
-    procesos, page = _paginate_query_no_count(query, page, per_page)
+    filters = _parse_filters(request.args)
+    query = (
+        Proceso.query.outerjoin(Taller)
+        .options(joinedload(Proceso.taller))
+    )
+    query = _apply_filters(query, filters)
+    query = _apply_sort(query, filters)
+    procesos, page, total_pages, total = _paginate_query_no_count(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
         .filter(Proceso.estado == "en proceso")
@@ -237,7 +266,22 @@ def rpa_enargas_table():
         procesos=procesos,
         stale_ids=stale_ids,
     )
-    return jsonify({"html": html, "has_pending": has_pending})
+    pagination = render_template(
+        "partials/rpa_pagination.html",
+        page=page,
+        total_pages=total_pages,
+        filter_params=_build_filter_params(filters),
+    )
+    return jsonify(
+        {
+            "html": html,
+            "has_pending": has_pending,
+            "pagination": pagination,
+            "total": total,
+            "page": page,
+            "total_pages": total_pages,
+        }
+    )
 
 
 @main.route("/tools/rpa-enargas/session-status")
@@ -329,6 +373,85 @@ def _enqueue_rpa_async(proceso_id):
         proceso.pdf_filename = None
         proceso.error_message = "No se pudo encolar el proceso."
         db.session.commit()
+
+
+def _parse_filters(args):
+    filters = {
+        "query": (args.get("f_query") or "").strip(),
+        "estado": (args.get("f_estado") or "").strip(),
+        "resultado": (args.get("f_resultado") or "").strip(),
+        "date_from": (args.get("f_date_from") or "").strip(),
+        "date_to": (args.get("f_date_to") or "").strip(),
+        "sort": (args.get("sort") or "fecha").strip(),
+        "dir": (args.get("dir") or "desc").strip(),
+    }
+    return filters
+
+
+def _build_filter_params(filters):
+    params = {}
+    if filters.get("query"):
+        params["f_query"] = filters["query"]
+    if filters.get("estado"):
+        params["f_estado"] = filters["estado"]
+    if filters.get("resultado"):
+        params["f_resultado"] = filters["resultado"]
+    if filters.get("date_from"):
+        params["f_date_from"] = filters["date_from"]
+    if filters.get("date_to"):
+        params["f_date_to"] = filters["date_to"]
+    if filters.get("sort"):
+        params["sort"] = filters["sort"]
+    if filters.get("dir"):
+        params["dir"] = filters["dir"]
+    return params
+
+
+def _apply_filters(query, filters):
+    if filters["query"]:
+        cleaned = _normalize_patente(filters["query"])
+        like_query = f"%{filters['query']}%"
+        like_patente = f"%{cleaned}%"
+        query = query.filter(
+            or_(
+                Proceso.patente.ilike(like_patente),
+                Taller.nombre.ilike(like_query),
+            )
+        )
+    if filters["estado"]:
+        query = query.filter(Proceso.estado.ilike(f"%{filters['estado']}%"))
+    if filters["resultado"]:
+        query = query.filter(Proceso.resultado.ilike(f"%{filters['resultado']}%"))
+
+    if filters["date_from"]:
+        try:
+            start = datetime.strptime(filters["date_from"], "%Y-%m-%d")
+            query = query.filter(Proceso.created_at >= start)
+        except ValueError:
+            pass
+    if filters["date_to"]:
+        try:
+            end = datetime.strptime(filters["date_to"], "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Proceso.created_at < end)
+        except ValueError:
+            pass
+
+    return query
+
+
+def _apply_sort(query, filters):
+    sort_key = filters.get("sort") or "fecha"
+    direction = (filters.get("dir") or "desc").lower()
+    is_desc = direction != "asc"
+
+    sort_map = {
+        "fecha": Proceso.created_at,
+        "patente": Proceso.patente,
+    }
+    column = sort_map.get(sort_key, Proceso.created_at)
+    if is_desc:
+        return query.order_by(column.desc())
+    return query.order_by(column.asc())
 
 
 @main.route("/settings", methods=["GET", "POST"])

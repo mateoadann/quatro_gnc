@@ -63,6 +63,8 @@ toggleButtons.forEach((button) => {
 const refreshCard = document.querySelector("[data-refresh-url]");
 const refreshBody = document.querySelector("#rpa-table-body");
 const refreshPagination = document.querySelector("#rpa-pagination");
+const refreshPaginationTop = document.querySelector("#rpa-pagination-top");
+const totalCountEl = document.querySelector("#rpa-total-count");
 let refreshTimerId = null;
 
 const refreshTable = async () => {
@@ -85,9 +87,18 @@ const refreshTable = async () => {
     }
     const payload = await response.json();
     refreshBody.innerHTML = payload.html;
-    if (refreshPagination && payload.pagination !== undefined) {
-      refreshPagination.innerHTML = payload.pagination;
+    if (payload.pagination !== undefined) {
+      if (refreshPagination) {
+        refreshPagination.innerHTML = payload.pagination;
+      }
+      if (refreshPaginationTop) {
+        refreshPaginationTop.innerHTML = payload.pagination;
+      }
     }
+    if (totalCountEl && payload.total !== undefined) {
+      totalCountEl.textContent = payload.total;
+    }
+    updatePaginationState(payload);
     if (payload.has_pending) {
       refreshTimerId = setTimeout(refreshTable, interval);
     } else {
@@ -122,11 +133,17 @@ const escapeHtml = (value) => {
 };
 
 const createOptimisticRow = (patente, tallerName, placeholderId) => {
+  const now = new Date();
+  const formattedDate = now.toLocaleDateString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
   const row = document.createElement("tr");
   row.dataset.placeholderId = placeholderId;
   row.classList.add("pending-row");
   row.innerHTML = `
-    <td>${new Date().toLocaleString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</td>
+    <td>${formattedDate}</td>
     <td>${escapeHtml(patente)}</td>
     <td>${escapeHtml(tallerName || "-")}</td>
     <td><span class="badge en-proceso">en proceso</span></td>
@@ -385,9 +402,316 @@ if (refreshBody) {
   });
 }
 
+const filterForm = document.querySelector("#rpa-filter-form");
+const filterClearBtn = document.querySelector("#rpa-filter-clear");
+const filterDrawer = document.querySelector("#rpa-filter-drawer");
+const filterOpenBtn = document.querySelector("#rpa-filter-open");
+const sortDirInput = document.querySelector("#rpa-sort-dir");
+const sortKeyInput = document.querySelector("#rpa-sort-key");
+const estadoInput = document.querySelector("#filter-estado");
+const resultadoInput = document.querySelector("#filter-resultado");
+const chipButtons = document.querySelectorAll("[data-chip-group]");
+const sortableHeaders = document.querySelectorAll("th.sortable");
+const queryInput = filterForm?.querySelector("input[name='f_query']");
+const dateFromInput = filterForm?.querySelector("input[name='f_date_from']");
+const dateToInput = filterForm?.querySelector("input[name='f_date_to']");
+let currentPage = 1;
+let currentTotalPages = 1;
+
+const buildFilterParams = () => {
+  if (!filterForm) {
+    return new URLSearchParams();
+  }
+  const formData = new FormData(filterForm);
+  const params = new URLSearchParams();
+  for (const [key, value] of formData.entries()) {
+    if (value) {
+      params.set(key, value);
+    }
+  }
+  if (sortKeyInput?.value) {
+    params.set("sort", sortKeyInput.value);
+  }
+  if (sortDirInput?.value) {
+    params.set("dir", sortDirInput.value);
+  }
+  return params;
+};
+
+const updateSortIndicators = () => {
+  if (!sortKeyInput || !sortDirInput) {
+    return;
+  }
+  const activeKey = sortKeyInput.value;
+  const isAsc = sortDirInput.value === "asc";
+  sortableHeaders.forEach((header) => {
+    const isActive = header.dataset.sort === activeKey;
+    header.classList.toggle("is-active", isActive);
+    header.classList.toggle("is-asc", isActive && isAsc);
+    header.classList.toggle("is-desc", isActive && !isAsc);
+  });
+};
+
+const setChipSelection = (group, value) => {
+  if (group === "estado" && estadoInput) {
+    estadoInput.value = estadoInput.value === value ? "" : value;
+  }
+  if (group === "resultado" && resultadoInput) {
+    resultadoInput.value = resultadoInput.value === value ? "" : value;
+  }
+  chipButtons.forEach((button) => {
+    if (button.dataset.chipGroup !== group) {
+      return;
+    }
+    const isActive =
+      (group === "estado" && estadoInput?.value === button.dataset.chipValue) ||
+      (group === "resultado" && resultadoInput?.value === button.dataset.chipValue);
+    button.classList.toggle("is-active", isActive);
+  });
+};
+
+let filterTimer = null;
+const applyFilters = () => {
+  if (!refreshCard) {
+    return;
+  }
+  const baseUrl = refreshCard.dataset.refreshBaseUrl || refreshCard.dataset.refreshUrl;
+  if (!baseUrl) {
+    return;
+  }
+  const params = buildFilterParams();
+  params.delete("page");
+  const nextUrl = params.toString()
+    ? `${baseUrl}?${params.toString()}`
+    : baseUrl;
+  refreshCard.dataset.refreshUrl = nextUrl;
+  refreshCard.dataset.autoRefresh = "true";
+  refreshTable();
+  updateSortIndicators();
+};
+
+const scheduleFilterApply = () => {
+  clearTimeout(filterTimer);
+  filterTimer = setTimeout(applyFilters, 400);
+};
+
+if (filterForm) {
+  filterForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    applyFilters();
+    if (filterDrawer) {
+      filterDrawer.classList.remove("is-open");
+      filterDrawer.setAttribute("aria-hidden", "true");
+    }
+  });
+  filterForm.querySelectorAll("input, select").forEach((input) => {
+    if (input.type === "hidden") {
+      return;
+    }
+    const handler = input.tagName === "SELECT" ? applyFilters : scheduleFilterApply;
+    input.addEventListener("input", handler);
+    input.addEventListener("change", handler);
+  });
+}
+
+const clearCachedDateInputs = () => {
+  if (!dateFromInput && !dateToInput) {
+    return;
+  }
+  const params = new URLSearchParams(window.location.search);
+  if (params.has("f_date_from") || params.has("f_date_to")) {
+    return;
+  }
+  if (dateFromInput) {
+    dateFromInput.value = "";
+  }
+  if (dateToInput) {
+    dateToInput.value = "";
+  }
+};
+
+if (filterForm) {
+  window.requestAnimationFrame(clearCachedDateInputs);
+}
+
+if (filterClearBtn && filterForm) {
+  filterClearBtn.addEventListener("click", () => {
+    filterForm.reset();
+    if (queryInput) {
+      queryInput.value = "";
+    }
+    if (dateFromInput) {
+      dateFromInput.value = "";
+    }
+    if (dateToInput) {
+      dateToInput.value = "";
+    }
+    if (estadoInput) {
+      estadoInput.value = "";
+    }
+    if (resultadoInput) {
+      resultadoInput.value = "";
+    }
+    if (sortDirInput) {
+      sortDirInput.value = "desc";
+    }
+    if (sortKeyInput) {
+      sortKeyInput.value = "fecha";
+    }
+    chipButtons.forEach((button) => {
+      button.classList.remove("is-active");
+    });
+    updateSortIndicators();
+    applyFilters();
+  });
+}
+
+if (sortableHeaders.length && sortKeyInput && sortDirInput) {
+  updateSortIndicators();
+  sortableHeaders.forEach((header) => {
+    header.addEventListener("click", () => {
+      const nextKey = header.dataset.sort;
+      if (!nextKey) {
+        return;
+      }
+      if (sortKeyInput.value === nextKey) {
+        sortDirInput.value = sortDirInput.value === "asc" ? "desc" : "asc";
+      } else {
+        sortKeyInput.value = nextKey;
+        sortDirInput.value = "desc";
+      }
+      updateSortIndicators();
+      applyFilters();
+    });
+  });
+}
+
+if (chipButtons.length) {
+  chipButtons.forEach((button) => {
+    button.addEventListener("click", () => {
+      const group = button.dataset.chipGroup;
+      const value = button.dataset.chipValue;
+      if (!group || !value) {
+        return;
+      }
+      setChipSelection(group, value);
+      applyFilters();
+    });
+  });
+  if (estadoInput?.value) {
+    setChipSelection("estado", estadoInput.value);
+  }
+  if (resultadoInput?.value) {
+    setChipSelection("resultado", resultadoInput.value);
+  }
+}
+
+if (filterOpenBtn && filterDrawer) {
+  filterOpenBtn.addEventListener("click", () => {
+    filterDrawer.classList.add("is-open");
+    filterDrawer.setAttribute("aria-hidden", "false");
+  });
+}
+
+if (filterDrawer) {
+  filterDrawer.addEventListener("click", (event) => {
+    if (event.target.closest("[data-filter-close]")) {
+      filterDrawer.classList.remove("is-open");
+      filterDrawer.setAttribute("aria-hidden", "true");
+    }
+  });
+}
+
+const updatePaginationState = (payload) => {
+  if (!payload) {
+    return;
+  }
+  if (payload.page !== undefined) {
+    currentPage = Number.parseInt(payload.page, 10) || 1;
+  }
+  if (payload.total_pages !== undefined) {
+    currentTotalPages = Number.parseInt(payload.total_pages, 10) || 1;
+  }
+};
+
+const handlePaginationClick = (event) => {
+  const button = event.target.closest("[data-page-action]");
+  if (!button || button.disabled) {
+    return;
+  }
+  const action = button.dataset.pageAction;
+  let nextPage = currentPage;
+  if (action === "prev") {
+    nextPage = Math.max(1, currentPage - 1);
+  }
+  if (action === "next") {
+    nextPage = Math.min(currentTotalPages, currentPage + 1);
+  }
+  const params = buildFilterParams();
+  params.set("page", String(nextPage));
+  const baseUrl = refreshCard?.dataset.refreshBaseUrl || refreshCard?.dataset.refreshUrl;
+  if (!baseUrl || !refreshCard) {
+    return;
+  }
+  refreshCard.dataset.refreshUrl = `${baseUrl}?${params.toString()}`;
+  refreshCard.dataset.autoRefresh = "true";
+  refreshTable();
+};
+
+const initPaginationState = () => {
+  const pagination =
+    refreshPaginationTop?.querySelector(".pagination") ||
+    refreshPagination?.querySelector(".pagination");
+  if (!pagination) {
+    return;
+  }
+  const pageAttr = pagination.getAttribute("data-page");
+  const totalAttr = pagination.getAttribute("data-total-pages");
+  if (pageAttr) {
+    currentPage = Number.parseInt(pageAttr, 10) || currentPage;
+  }
+  if (totalAttr) {
+    currentTotalPages = Number.parseInt(totalAttr, 10) || currentTotalPages;
+  }
+};
+
+if (refreshPagination) {
+  refreshPagination.addEventListener("click", handlePaginationClick);
+}
+if (refreshPaginationTop) {
+  refreshPaginationTop.addEventListener("click", handlePaginationClick);
+}
+initPaginationState();
+
 const sessionStatusSection = document.querySelector("[data-session-status-url]");
 const sessionStatusContent = document.querySelector("#rpa-session-status");
 let lastSessionPayload = null;
+
+const tableCard = document.querySelector(".table-card");
+let lastScrollY = window.scrollY;
+
+const handleTableAnchor = (event) => {
+  if (!tableCard) {
+    return;
+  }
+  const trigger = event.target.closest("button, a, th.sortable");
+  if (!trigger) {
+    return;
+  }
+  tableCard.classList.add("is-sticky");
+  tableCard.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
+if (tableCard) {
+  tableCard.addEventListener("click", handleTableAnchor);
+  window.addEventListener("scroll", () => {
+    const currentY = window.scrollY;
+    if (currentY < lastScrollY && tableCard.classList.contains("is-sticky")) {
+      tableCard.classList.remove("is-sticky");
+    }
+    lastScrollY = currentY;
+  });
+}
 
 const formatCountdown = (totalSeconds) => {
   if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {

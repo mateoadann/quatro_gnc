@@ -1,19 +1,11 @@
 {% if total_pages > 1 %}
-<nav class="pagination">
-  <a
-    class="ghost-btn"
-    href="{{ url_for('main.rpa_enargas', page=page - 1) }}"
-    {% if page <= 1 %}aria-disabled="true"{% endif %}
-  >
+<nav class="pagination" data-page="{{ page }}" data-total-pages="{{ total_pages }}">
+  <button class="ghost-btn pagination-btn" type="button" data-page-action="prev" {% if page <= 1 %}disabled{% endif %}>
     Anterior
-  </a>
+  </button>
   <span class="muted">Pagina {{ page }} de {{ total_pages }}</span>
-  <a
-    class="ghost-btn"
-    href="{{ url_for('main.rpa_enargas', page=page + 1) }}"
-    {% if page >= total_pages %}aria-disabled="true"{% endif %}
-  >
+  <button class="ghost-btn pagination-btn" type="button" data-page-action="next" {% if page >= total_pages %}disabled{% endif %}>
     Siguiente
-  </a>
+  </button>
 </nav>
 {% endif %}

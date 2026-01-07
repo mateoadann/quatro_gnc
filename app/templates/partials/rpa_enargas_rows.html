@@ -1,6 +1,6 @@
 {% for proceso in procesos %}
 <tr data-proceso-id="{{ proceso.id }}">
-  <td>{{ proceso.created_at.strftime("%d/%m/%Y %H:%M") if proceso.created_at else "-" }}</td>
+  <td>{{ proceso.created_at.strftime("%d/%m/%y") if proceso.created_at else "-" }}</td>
   <td>{{ proceso.patente }}</td>
   <td>{{ proceso.taller.nombre if proceso.taller else "-" }}</td>
   <td>

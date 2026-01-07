@@ -3,7 +3,7 @@
 {% block content %}
 <section class="hero compact">
   <div>
-    <h1>RPA_Enargas</h1>
+    <h1>Proceso Enargas</h1>
     <p>Ejecuta consultas automatizadas y gestiona los PDFs obtenidos.</p>
   </div>
 </section>
@@ -19,7 +19,7 @@
           <input
             type="text"
             name="patente"
-            placeholder="AB123CD"
+            placeholder="AAA123 o AA123AA"
             pattern="^([A-Za-z]{3}[- ]?[0-9]{3}|[A-Za-z]{2}[- ]?[0-9]{3}[- ]?[A-Za-z]{2})$"
             title="Formato permitido: AAA123 o AA123AA"
             data-uppercase="true"
@@ -48,7 +48,7 @@
         </div>
       </div>
       <input type="hidden" name="taller_name" id="taller-name" />
-      <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p>
+      <!-- <p class="muted">Solo se aceptan patentes AAA123 o AA123AA.</p> -->
     </form>
     <div
       class="session-status"
@@ -63,7 +63,7 @@
         <p class="muted">Ingresa el nombre del taller que queres agregar.</p>
         <label class="form-field">
           Nombre del taller
-          <input type="text" id="taller-modal-name" placeholder="Ej: Taller Central" />
+          <input type="text" id="taller-modal-name" placeholder="Nombre Taller" />
         </label>
         <div class="modal-error is-hidden" id="taller-modal-error">El nombre es obligatorio.</div>
         <div class="modal-actions">
@@ -96,17 +96,135 @@
 
 <section class="grid stack">
   <div
-    class="card"
+    class="card table-card"
     data-auto-refresh="{{ 'true' if has_pending else 'false' }}"
     data-refresh-interval="5000"
-    data-refresh-url="{{ url_for('main.rpa_enargas_table', page=page) }}"
+    data-refresh-base-url="{{ url_for('main.rpa_enargas_table') }}"
+    data-refresh-url="{{ url_for('main.rpa_enargas_table', page=page, **(filter_params or {})) }}"
   >
     <h2>Consultas recientes</h2>
+    <div class="table-tools">
+      <form class="filter-bar" id="rpa-filter-form" method="get" action="{{ url_for('main.rpa_enargas') }}" autocomplete="off">
+        <div class="filter-bar__row">
+          <label class="filter-field filter-field--grow">
+            Buscar
+            <input
+              type="text"
+              name="f_query"
+              value="{{ filters.query or '' }}"
+              placeholder="Patente o taller"
+            />
+          </label>
+          <div class="filter-pagination" id="rpa-pagination-top">
+            {% include "partials/rpa_pagination.html" %}
+          </div>
+          <button class="ghost-btn" type="button" id="rpa-filter-open">Filtros</button>
+        </div>
+        <input type="hidden" name="f_estado" id="filter-estado" value="{{ filters.estado or '' }}" />
+        <input type="hidden" name="f_resultado" id="filter-resultado" value="{{ filters.resultado or '' }}" />
+        <input type="hidden" name="sort" id="rpa-sort-key" value="{{ filters.sort or 'fecha' }}" />
+        <input type="hidden" name="dir" id="rpa-sort-dir" value="{{ filters.dir or 'desc' }}" />
+        <div class="filter-drawer" id="rpa-filter-drawer" aria-hidden="true">
+          <div class="filter-drawer__overlay" data-filter-close></div>
+          <div class="filter-drawer__panel" role="dialog" aria-modal="true">
+            <div class="filter-drawer__header">
+              <h3>Filtros</h3>
+              <button class="ghost-btn icon-btn" type="button" data-filter-close aria-label="Cerrar filtros">
+                <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+                  <path
+                    d="M6.5 5.1a1 1 0 0 1 1.4 0L12 9.2l4.1-4.1a1 1 0 0 1 1.4 1.4L13.4 10.6l4.1 4.1a1 1 0 1 1-1.4 1.4L12 12l-4.1 4.1a1 1 0 0 1-1.4-1.4l4.1-4.1-4.1-4.1a1 1 0 0 1 0-1.4z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
+            </div>
+            <div class="chip-group">
+              <span class="chip-label">Estado</span>
+              <button
+                class="chip {% if filters.estado == 'en proceso' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="estado"
+                data-chip-value="en proceso"
+              >
+                En proceso
+              </button>
+              <button
+                class="chip {% if filters.estado == 'completado' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="estado"
+                data-chip-value="completado"
+              >
+                Completado
+              </button>
+              <button
+                class="chip {% if filters.estado == 'error' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="estado"
+                data-chip-value="error"
+              >
+                Error
+              </button>
+            </div>
+            <div class="chip-group">
+              <span class="chip-label">Resultado</span>
+              <button
+                class="chip {% if filters.resultado == 'Renovación de Oblea' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Renovación de Oblea"
+              >
+                Renovación
+              </button>
+              <button
+                class="chip {% if filters.resultado == 'Prueba Hidraulica' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Prueba Hidraulica"
+              >
+                Hidraulica
+              </button>
+              <button
+                class="chip {% if filters.resultado == 'Patente NO registrada' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Patente NO registrada"
+              >
+                No registrada
+              </button>
+              <button
+                class="chip {% if filters.resultado == 'Sesión Activa' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Sesión Activa"
+              >
+                Sesión activa
+              </button>
+            </div>
+            <label class="filter-field">
+              Fecha desde
+            <input type="date" name="f_date_from" value="{{ filters.date_from or '' }}" autocomplete="off" />
+          </label>
+          <label class="filter-field">
+            Fecha hasta
+            <input type="date" name="f_date_to" value="{{ filters.date_to or '' }}" autocomplete="off" />
+          </label>
+            <label class="filter-field">
+            <div class="filter-actions">
+              <button class="ghost-btn" type="button" id="rpa-filter-clear">Limpiar</button>
+              <button class="primary-btn" type="submit">Aplicar</button>
+            </div>
+          </div>
+        </div>
+      </form>
+      <div class="table-meta">
+        <span class="muted">Total: <strong id="rpa-total-count">{{ total_count }}</strong></span>
+      </div>
+    </div>
     <table>
       <thead>
         <tr>
-          <th>Fecha</th>
-          <th>Patente</th>
+          <th class="sortable" data-sort="fecha">Fecha</th>
+          <th class="sortable" data-sort="patente">Patente</th>
           <th>Taller</th>
           <th>Estado</th>
           <th>Resultado</th>
