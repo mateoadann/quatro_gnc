@@ -1,5 +1,6 @@
 import io
 import math
+import os
 import re
 
 from datetime import datetime, timedelta
@@ -21,6 +22,7 @@ from .extensions import db
 from .models import EnargasCredentials, ImgToPdfJob, Proceso, Taller
 from .queue import get_queue
 from .services.rpa_session import get_status as get_rpa_session_status
+from .services.img_to_pdf import build_previews, save_previews_to_folder
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
@@ -38,6 +40,10 @@ def _normalize_patente(raw_value):
 
 def _is_valid_patente(value):
     return bool(PATENTE_PATTERN.match(value))
+
+
+def _safe_filename(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "_", value).strip("_")
 
 
 def _paginate_query(query, page: int, per_page: int):
@@ -84,8 +90,124 @@ def dashboard():
 @main.route("/tools/img-to-pdf")
 @login_required
 def img_to_pdf():
-    jobs = ImgToPdfJob.query.order_by(ImgToPdfJob.created_at.desc()).all()
+    jobs = (
+        ImgToPdfJob.query.filter_by(user_id=current_user.id)
+        .order_by(ImgToPdfJob.created_at.desc())
+        .all()
+    )
     return render_template("img_to_pdf.html", jobs=jobs)
+
+
+def _render_img_job_row(job):
+    return render_template("partials/img_to_pdf_rows.html", jobs=[job])
+
+
+@main.route("/tools/img-to-pdf/preview", methods=["POST"])
+@login_required
+def img_to_pdf_preview():
+    files = request.files.getlist("images")
+    if not files:
+        return jsonify({"error": "Debes subir al menos una imagen."}), 400
+
+    enhance_mode = request.form.get("enhance_mode", "soft")
+    try:
+        previews = build_previews(files, enhance_mode=enhance_mode)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        return jsonify({"error": "No se pudo procesar las imagenes."}), 500
+
+    return jsonify({"previews": previews})
+
+
+@main.route("/tools/img-to-pdf/generate", methods=["POST"])
+@login_required
+def img_to_pdf_generate():
+    payload = request.get_json(silent=True) or {}
+    images = payload.get("images") or []
+    filename = payload.get("filename") or ""
+
+    if not images:
+        return jsonify({"error": "No se recibieron imagenes para generar el PDF."}), 400
+
+    safe_name = _safe_filename(filename) if filename else ""
+    if safe_name:
+        if not safe_name.lower().endswith(".pdf"):
+            safe_name = f"{safe_name}.pdf"
+    else:
+        safe_name = f"imagenes_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+    job = ImgToPdfJob(
+        user_id=current_user.id,
+        filename=safe_name,
+        status="queued",
+        page_count=0,
+    )
+    db.session.add(job)
+    db.session.commit()
+
+    folder = os.path.join("debug", "img_to_pdf", str(job.id))
+    try:
+        image_paths = save_previews_to_folder(images, folder)
+    except ValueError as exc:
+        db.session.delete(job)
+        db.session.commit()
+        return jsonify({"error": str(exc)}), 400
+    except Exception:
+        db.session.delete(job)
+        db.session.commit()
+        return jsonify({"error": "No se pudieron preparar las imagenes."}), 500
+
+    queue = get_queue()
+    queue.enqueue("app.tasks.process_img_to_pdf_job", job.id, image_paths)
+
+    row_html = _render_img_job_row(job)
+    return jsonify({"job_id": job.id, "row_html": row_html})
+
+
+@main.route("/tools/img-to-pdf/table")
+@login_required
+def img_to_pdf_table():
+    jobs = (
+        ImgToPdfJob.query.filter_by(user_id=current_user.id)
+        .order_by(ImgToPdfJob.created_at.desc())
+        .all()
+    )
+    has_pending = any(job.status in {"queued", "processing", "pending"} for job in jobs)
+    html = render_template("partials/img_to_pdf_rows.html", jobs=jobs)
+    return jsonify({"html": html, "has_pending": has_pending})
+
+
+@main.route("/tools/img-to-pdf/<int:job_id>/download")
+@login_required
+def img_to_pdf_download(job_id):
+    job = ImgToPdfJob.query.filter_by(id=job_id, user_id=current_user.id).first()
+    if not job or not job.pdf_data:
+        flash("El PDF aun no esta disponible.", "error")
+        return redirect(url_for("main.img_to_pdf"))
+
+    return send_file(
+        io.BytesIO(job.pdf_data),
+        mimetype="application/pdf",
+        download_name=job.pdf_filename or job.filename,
+        as_attachment=True,
+    )
+
+
+@main.route("/tools/img-to-pdf/<int:job_id>/view")
+@login_required
+def img_to_pdf_view(job_id):
+    job = ImgToPdfJob.query.filter_by(id=job_id, user_id=current_user.id).first()
+    if not job or not job.pdf_data:
+        flash("El PDF aun no esta disponible.", "error")
+        return redirect(url_for("main.img_to_pdf"))
+
+    return send_file(
+        io.BytesIO(job.pdf_data),
+        mimetype="application/pdf",
+        download_name=job.pdf_filename or job.filename,
+        as_attachment=False,
+    )
 
 
 @main.route("/tools/rpa-enargas", methods=["GET", "POST"])

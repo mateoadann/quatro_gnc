@@ -3,49 +3,97 @@
 {% block content %}
 <section class="hero compact">
   <div>
-    <h1>IMG_to_PDF</h1>
-    <p>Convierte imagenes en un PDF listo para imprimir con filtros de mejora.</p>
+    <h1>Procesar Imagenes</h1>
+    <p>Convierte imagenes en un PDF listo para imprimir.</p>
   </div>
 </section>
 
-<section class="grid">
-  <div class="card">
+<section class="grid two-col">
+  <div class="card img-pdf-card">
     <h2>Cargar imagenes</h2>
-    <form class="form-grid" method="post" enctype="multipart/form-data">
+    <form class="form-grid" id="img-pdf-upload-form" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
-      <label>
-        Seleccionar archivos
-        <input type="file" name="images" multiple disabled />
+      <label class="dropzone" for="img-pdf-files">
+        <span class="dropzone-title">Arrastra imagenes o hace click para seleccionar</span>
+        <span class="muted">Maximo 6 documentos por PDF.</span>
+        <input type="file" id="img-pdf-files" name="images" multiple accept="image/*" />
       </label>
-      <button class="primary-btn" type="button" disabled>Procesar (proximamente)</button>
-      <p class="muted">La logica de conversion se integrara en la siguiente iteracion.</p>
+      <div class="upload-list" id="img-upload-list">
+        <p class="muted upload-list__empty">No hay imagenes seleccionadas.</p>
+      </div>
+      <div class="form-row">
+        <label class="filter-field">
+          Nombre del PDF
+          <input type="text" id="img-pdf-filename" placeholder="imagenes_renovacion.pdf" />
+        </label>
+      </div>
+      <button class="primary-btn" type="button" id="img-pdf-preview-btn">Previsualizar</button>
+      <p class="muted">Luego podes editar cada recorte antes de generar el PDF final.</p>
     </form>
   </div>
 
-  <div class="card">
+  <div class="card img-pdf-preview">
+    <div class="img-preview is-empty" id="img-pdf-preview" aria-live="polite">
+      <div class="img-preview__header">
+        <div>
+          <h3>Previsualizacion</h3>
+          <p class="muted">Edita los recortes si es necesario y confirma.</p>
+        </div>
+        <button class="primary-btn" type="button" id="img-pdf-generate-btn" disabled>Generar PDF</button>
+      </div>
+      <p class="muted img-preview__empty">Sube imagenes para ver la previsualizacion.</p>
+      <div class="img-preview__grid" id="img-pdf-preview-grid"></div>
+    </div>
+  </div>
+</section>
+
+<section class="grid stack">
+  <div class="card img-pdf-history" data-img-refresh-url="{{ url_for('main.img_to_pdf_table') }}" data-img-refresh-interval="5000">
     <h2>Historial</h2>
     <table>
       <thead>
         <tr>
           <th>Archivo</th>
-          <th>Paginas</th>
+          <th>Imagenes</th>
           <th>Estado</th>
+          <th>Accion</th>
         </tr>
       </thead>
-      <tbody>
-        {% for job in jobs %}
-        <tr>
-          <td>{{ job.filename }}</td>
-          <td>{{ job.page_count }}</td>
-          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
-        </tr>
+      <tbody id="img-pdf-table-body">
+        {% if jobs %}
+          {% include "partials/img_to_pdf_rows.html" %}
         {% else %}
         <tr>
-          <td colspan="3" class="muted">Aun no hay conversiones.</td>
+          <td colspan="4" class="muted">Aun no hay conversiones.</td>
         </tr>
-        {% endfor %}
+        {% endif %}
       </tbody>
     </table>
   </div>
 </section>
+
+<div class="crop-modal" id="img-crop-modal" aria-hidden="true">
+  <div class="crop-modal__overlay" data-crop-close></div>
+  <div class="crop-modal__panel" role="dialog" aria-modal="true">
+    <div class="crop-modal__header">
+      <h3>Editar recorte</h3>
+        <button class="ghost-btn icon-btn img-icon" type="button" data-crop-close aria-label="Cerrar">×</button>
+    </div>
+    <div class="crop-modal__body">
+      <canvas id="img-crop-canvas"></canvas>
+      <p class="muted">Arrastra para definir el recorte. Podes volver a intentarlo.</p>
+    </div>
+    <div class="crop-modal__actions">
+      <div class="crop-modal__tools">
+        <button class="ghost-btn icon-btn img-icon" type="button" data-crop-rotate="left" aria-label="Rotar izquierda">⟲</button>
+        <button class="ghost-btn icon-btn img-icon" type="button" data-crop-rotate="right" aria-label="Rotar derecha">⟳</button>
+      </div>
+      <div class="crop-modal__buttons">
+        <button class="ghost-btn" type="button" id="img-crop-restart">Reiniciar</button>
+        <button class="ghost-btn" type="button" id="img-crop-reset">Restablecer</button>
+        <button class="primary-btn" type="button" id="img-crop-apply">Aplicar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

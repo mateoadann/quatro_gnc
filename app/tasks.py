@@ -1,11 +1,12 @@
 from . import create_app
 from .extensions import db
-from .models import EnargasCredentials, Proceso
+from .models import EnargasCredentials, ImgToPdfJob, Proceso
 from .queue import get_queue
 import traceback
 
 from .services.rpa_enargas import NoOperacionesError, SessionActivaError, run_rpa
 from .services.process_pdf_enargas import analyze_pdf_bytes
+from .services.img_to_pdf import create_pdf_from_files
 
 
 def process_rpa_job(proceso_id: int) -> None:
@@ -91,8 +92,43 @@ def process_pdf_job(proceso_id: int) -> None:
         db.session.commit()
 
 
+def process_img_to_pdf_job(job_id: int, image_paths: list[str]) -> None:
+    app = create_app()
+    with app.app_context():
+        job = ImgToPdfJob.query.get(job_id)
+        if not job:
+            return
+
+        try:
+            job.status = "processing"
+            db.session.commit()
+
+            pdf_bytes, page_count = create_pdf_from_files(image_paths)
+            job.pdf_data = pdf_bytes
+            job.page_count = page_count
+            job.pdf_filename = job.filename
+            job.status = "done"
+            job.error_message = None
+        except Exception as exc:
+            job.status = "error"
+            job.error_message = _format_img_pdf_error(exc)
+
+        db.session.commit()
+
+
 def _format_error() -> str:
     detail = traceback.format_exc()
     if not detail:
         return "Error desconocido en el proceso RPA."
     return detail[-1200:]
+
+
+def _format_img_pdf_error(exc: Exception) -> str:
+    detail = str(exc or "")
+    if "No se pudo leer la imagen" in detail:
+        return "No se pudo leer una de las imagenes. Verifica el formato."
+    if "No se recibieron imágenes" in detail or "No se recibieron imagenes" in detail:
+        return "No se recibieron imagenes validas para generar el PDF."
+    if "No se pudo codificar la imagen" in detail:
+        return "No se pudo procesar una imagen. Intenta con otra foto."
+    return "No se pudo generar el PDF. Intenta nuevamente."

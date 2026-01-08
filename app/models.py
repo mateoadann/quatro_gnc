@@ -56,7 +56,13 @@ class ImgToPdfJob(db.Model):
     filename = db.Column(db.String(255), nullable=False)
     page_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(40), default="pending")
+    pdf_filename = db.Column(db.String(255), nullable=True)
+    pdf_data = deferred(db.Column(db.LargeBinary, nullable=True))
+    error_message = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(
+        db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
 
 class RpaEnargasJob(db.Model):

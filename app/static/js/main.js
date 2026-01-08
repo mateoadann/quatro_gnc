@@ -8,6 +8,42 @@ flashMessages.forEach((message) => {
   }, 3500);
 });
 
+const ensureToastStack = () => {
+  let stack = document.querySelector("#toast-stack");
+  if (!stack) {
+    stack = document.createElement("div");
+    stack.id = "toast-stack";
+    stack.className = "toast-stack";
+    document.body.appendChild(stack);
+  }
+  return stack;
+};
+
+const showToast = (message, type = "error") => {
+  const stack = ensureToastStack();
+  const toast = document.createElement("div");
+  toast.className = `toast ${type}`;
+  const text = document.createElement("div");
+  text.className = "toast__text";
+  text.textContent = message;
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.className = "toast__close";
+  closeBtn.textContent = "×";
+  closeBtn.addEventListener("click", () => {
+    toast.remove();
+  });
+  toast.appendChild(text);
+  toast.appendChild(closeBtn);
+  stack.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("toast--hide");
+    setTimeout(() => {
+      toast.remove();
+    }, 200);
+  }, 4200);
+};
+
 const normalizedInputs = document.querySelectorAll(
   "input[data-uppercase='true'], input[data-strip='alnum']"
 );
@@ -341,7 +377,7 @@ if (rpaForm) {
       if (placeholder) {
         placeholder.remove();
       }
-      window.alert(error.message);
+      showToast(error.message);
     }
   });
 }
@@ -397,7 +433,7 @@ if (refreshBody) {
       if (row) {
         row.classList.remove("pending-row");
       }
-      window.alert(error.message);
+      showToast(error.message);
     }
   });
 }
@@ -784,4 +820,568 @@ if (sessionStatusSection) {
       renderSessionStatus(lastSessionPayload);
     }
   }, 1000);
+}
+
+const imgForm = document.querySelector("#img-pdf-upload-form");
+const imgFileInput = document.querySelector("#img-pdf-files");
+const imgEnhanceSelect = document.querySelector("#img-pdf-enhance");
+const imgPreviewBtn = document.querySelector("#img-pdf-preview-btn");
+const imgPreviewWrap = document.querySelector("#img-pdf-preview");
+const imgPreviewGrid = document.querySelector("#img-pdf-preview-grid");
+const imgGenerateBtn = document.querySelector("#img-pdf-generate-btn");
+const imgFilenameInput = document.querySelector("#img-pdf-filename");
+const imgRefreshCard = document.querySelector("[data-img-refresh-url]");
+const imgTableBody = document.querySelector("#img-pdf-table-body");
+const imgUploadList = document.querySelector("#img-upload-list");
+const getImgPdfCsrf = () => {
+  if (!imgForm) {
+    return "";
+  }
+  const tokenInput = imgForm.querySelector('input[name="csrf_token"]');
+  return tokenInput ? tokenInput.value : "";
+};
+
+const formatBytes = (bytes) => {
+  if (!bytes) {
+    return "0 KB";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+};
+
+const syncFileInput = () => {
+  if (!imgFileInput) {
+    return;
+  }
+  const dt = new DataTransfer();
+  selectedFiles.forEach((file) => {
+    dt.items.add(file);
+  });
+  imgFileInput.files = dt.files;
+};
+
+const renderUploadList = () => {
+  if (!imgUploadList) {
+    return;
+  }
+  imgUploadList.innerHTML = "";
+  if (!selectedFiles.length) {
+    const empty = document.createElement("p");
+    empty.className = "muted upload-list__empty";
+    empty.textContent = "No hay imagenes seleccionadas.";
+    imgUploadList.appendChild(empty);
+    return;
+  }
+  const header = document.createElement("div");
+  header.className = "upload-list__header";
+  header.textContent = `Imagenes seleccionadas (${selectedFiles.length})`;
+  imgUploadList.appendChild(header);
+  selectedFiles.forEach((file, index) => {
+    const row = document.createElement("div");
+    row.className = "upload-list__item";
+    const info = document.createElement("div");
+    info.innerHTML = `<div class="upload-list__name">${file.name}</div><div class="upload-list__meta">${formatBytes(file.size)}</div>`;
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "ghost-btn";
+    removeBtn.dataset.removeIndex = String(index);
+    removeBtn.textContent = "Quitar";
+    row.appendChild(info);
+    row.appendChild(removeBtn);
+    imgUploadList.appendChild(row);
+  });
+};
+
+const cropModal = document.querySelector("#img-crop-modal");
+const cropCanvas = document.querySelector("#img-crop-canvas");
+const cropApplyBtn = document.querySelector("#img-crop-apply");
+const cropResetBtn = document.querySelector("#img-crop-reset");
+const cropRestartBtn = document.querySelector("#img-crop-restart");
+const cropRotateButtons = document.querySelectorAll("[data-crop-rotate]");
+
+let previewItems = [];
+let activeCropIndex = null;
+let cropImage = null;
+let cropRect = null;
+let cropStart = null;
+let cropDragging = false;
+let cropDrawState = null;
+let cropCanvasBase = null;
+const CROP_MAX_WIDTH = 680;
+const CROP_MAX_HEIGHT = 520;
+const MAX_IMG_FILES = 6;
+let selectedFiles = [];
+
+if (imgFileInput) {
+  imgFileInput.addEventListener("change", () => {
+    const incoming = Array.from(imgFileInput.files || []);
+    if (!incoming.length) {
+      return;
+    }
+    const existingKeys = new Set(
+      selectedFiles.map((file) => `${file.name}_${file.size}_${file.lastModified}`)
+    );
+    incoming.forEach((file) => {
+      const key = `${file.name}_${file.size}_${file.lastModified}`;
+      if (!existingKeys.has(key)) {
+        selectedFiles.push(file);
+        existingKeys.add(key);
+      }
+    });
+    if (selectedFiles.length > MAX_IMG_FILES) {
+      selectedFiles = selectedFiles.slice(0, MAX_IMG_FILES);
+      showToast(`Solo podes cargar hasta ${MAX_IMG_FILES} imagenes.`);
+    }
+    syncFileInput();
+    renderUploadList();
+    previewItems = [];
+    renderPreviewGrid();
+  });
+}
+
+if (imgUploadList) {
+  imgUploadList.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-remove-index]");
+    if (!button) {
+      return;
+    }
+    const index = Number.parseInt(button.dataset.removeIndex || "", 10);
+    if (Number.isNaN(index)) {
+      return;
+    }
+    selectedFiles.splice(index, 1);
+    syncFileInput();
+    renderUploadList();
+    previewItems = [];
+    renderPreviewGrid();
+  });
+}
+
+renderUploadList();
+
+const renderPreviewGrid = () => {
+  if (!imgPreviewGrid) {
+    return;
+  }
+  imgPreviewGrid.innerHTML = "";
+  previewItems.forEach((item, index) => {
+    const card = document.createElement("div");
+    card.className = "preview-card";
+    const img = document.createElement("img");
+    img.src = item.editedUrl;
+    img.alt = `Documento ${index + 1}`;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ghost-btn";
+    btn.textContent = "Editar";
+    btn.dataset.index = String(index);
+    card.appendChild(img);
+    card.appendChild(btn);
+    imgPreviewGrid.appendChild(card);
+  });
+  if (imgPreviewWrap) {
+    imgPreviewWrap.classList.toggle("is-empty", previewItems.length === 0);
+  }
+  if (imgGenerateBtn) {
+    imgGenerateBtn.disabled = previewItems.length === 0;
+  }
+};
+
+const openCropModal = (index) => {
+  if (!cropModal || !cropCanvas) {
+    return;
+  }
+  activeCropIndex = index;
+  cropRect = null;
+  cropStart = null;
+  cropDragging = false;
+  cropDrawState = null;
+  const maxWidth = Math.min(
+    CROP_MAX_WIDTH,
+    Math.floor(window.innerWidth * 0.8)
+  );
+  const maxHeight = Math.min(
+    CROP_MAX_HEIGHT,
+    Math.floor(window.innerHeight * 0.6)
+  );
+  cropCanvasBase = {
+    width: Math.max(280, maxWidth),
+    height: Math.max(240, maxHeight),
+  };
+  cropImage = new Image();
+  cropImage.onload = () => {
+    cropCanvas.width = cropCanvasBase.width;
+    cropCanvas.height = cropCanvasBase.height;
+    drawCropCanvas();
+  };
+  cropImage.src = previewItems[index].editedUrl;
+  cropModal.classList.add("is-open");
+  cropModal.setAttribute("aria-hidden", "false");
+};
+
+const closeCropModal = () => {
+  if (!cropModal) {
+    return;
+  }
+  cropModal.classList.remove("is-open");
+  cropModal.setAttribute("aria-hidden", "true");
+};
+
+const drawCropCanvas = () => {
+  if (!cropCanvas || !cropImage) {
+    return;
+  }
+  const ctx = cropCanvas.getContext("2d");
+  if (!ctx) {
+    return;
+  }
+  const scale = Math.min(
+    cropCanvas.width / cropImage.width,
+    cropCanvas.height / cropImage.height
+  );
+  const drawWidth = cropImage.width * scale;
+  const drawHeight = cropImage.height * scale;
+  const offsetX = (cropCanvas.width - drawWidth) / 2;
+  const offsetY = (cropCanvas.height - drawHeight) / 2;
+  cropDrawState = { scale, drawWidth, drawHeight, offsetX, offsetY };
+  ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+  ctx.drawImage(cropImage, offsetX, offsetY, drawWidth, drawHeight);
+  if (cropRect) {
+    ctx.strokeStyle = "#c96b2a";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+    ctx.fillStyle = "rgba(201, 107, 42, 0.12)";
+    ctx.fillRect(cropRect.x, cropRect.y, cropRect.w, cropRect.h);
+  }
+};
+
+const canvasPoint = (event) => {
+  const rect = cropCanvas.getBoundingClientRect();
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+};
+
+if (cropCanvas) {
+  cropCanvas.addEventListener("mousedown", (event) => {
+    cropDragging = true;
+    cropStart = canvasPoint(event);
+    cropRect = { x: cropStart.x, y: cropStart.y, w: 0, h: 0 };
+  });
+
+  cropCanvas.addEventListener("mousemove", (event) => {
+    if (!cropDragging || !cropStart) {
+      return;
+    }
+    const point = canvasPoint(event);
+    cropRect = {
+      x: Math.min(cropStart.x, point.x),
+      y: Math.min(cropStart.y, point.y),
+      w: Math.abs(point.x - cropStart.x),
+      h: Math.abs(point.y - cropStart.y),
+    };
+    drawCropCanvas();
+  });
+
+  cropCanvas.addEventListener("mouseup", () => {
+    cropDragging = false;
+  });
+  cropCanvas.addEventListener("mouseleave", () => {
+    cropDragging = false;
+  });
+}
+
+if (imgPreviewGrid) {
+  imgPreviewGrid.addEventListener("click", (event) => {
+    const btn = event.target.closest("button[data-index]");
+    if (!btn) {
+      return;
+    }
+    const index = Number.parseInt(btn.dataset.index, 10);
+    if (Number.isNaN(index)) {
+      return;
+    }
+    openCropModal(index);
+  });
+}
+
+if (cropApplyBtn) {
+  cropApplyBtn.addEventListener("click", () => {
+    if (
+      activeCropIndex === null ||
+      !cropImage ||
+      !cropCanvas ||
+      !previewItems[activeCropIndex]
+    ) {
+      return;
+    }
+    if (!cropDrawState) {
+      return;
+    }
+    const drawRect = {
+      x: cropDrawState.offsetX,
+      y: cropDrawState.offsetY,
+      w: cropDrawState.drawWidth,
+      h: cropDrawState.drawHeight,
+    };
+    let rect = cropRect;
+    if (!rect || rect.w < 5 || rect.h < 5) {
+      rect = drawRect;
+    }
+    const x0 = Math.max(drawRect.x, rect.x);
+    const y0 = Math.max(drawRect.y, rect.y);
+    const x1 = Math.min(drawRect.x + drawRect.w, rect.x + rect.w);
+    const y1 = Math.min(drawRect.y + drawRect.h, rect.y + rect.h);
+    if (x1 - x0 < 2 || y1 - y0 < 2) {
+      rect = drawRect;
+    } else {
+      rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+    const sx = (rect.x - drawRect.x) / cropDrawState.scale;
+    const sy = (rect.y - drawRect.y) / cropDrawState.scale;
+    const sw = rect.w / cropDrawState.scale;
+    const sh = rect.h / cropDrawState.scale;
+
+    const output = document.createElement("canvas");
+    output.width = Math.max(1, Math.floor(sw));
+    output.height = Math.max(1, Math.floor(sh));
+    const ctx = output.getContext("2d");
+    if (!ctx) {
+      return;
+    }
+    ctx.drawImage(cropImage, sx, sy, sw, sh, 0, 0, output.width, output.height);
+    previewItems[activeCropIndex].editedUrl = output.toDataURL("image/png");
+    renderPreviewGrid();
+    closeCropModal();
+  });
+}
+
+const rotateDataUrl = (dataUrl, direction) =>
+  new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.height;
+      canvas.height = image.width;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("No se pudo preparar la rotacion."));
+        return;
+      }
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(direction === "left" ? -Math.PI / 2 : Math.PI / 2);
+      ctx.drawImage(image, -image.width / 2, -image.height / 2);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = () => reject(new Error("No se pudo rotar la imagen."));
+    image.src = dataUrl;
+  });
+
+if (cropRotateButtons.length) {
+  cropRotateButtons.forEach((button) => {
+    button.addEventListener("click", async () => {
+      if (activeCropIndex === null || !previewItems[activeCropIndex]) {
+        return;
+      }
+      const direction = button.dataset.cropRotate;
+      if (!direction) {
+        return;
+      }
+      try {
+        const rotatedUrl = await rotateDataUrl(
+          previewItems[activeCropIndex].editedUrl,
+          direction
+        );
+        previewItems[activeCropIndex].editedUrl = rotatedUrl;
+        cropRect = null;
+        if (cropImage) {
+          cropImage.src = rotatedUrl;
+        }
+        renderPreviewGrid();
+      } catch (error) {
+        showToast(error.message);
+      }
+    });
+  });
+}
+
+if (cropResetBtn) {
+  cropResetBtn.addEventListener("click", () => {
+    if (activeCropIndex === null) {
+      return;
+    }
+    previewItems[activeCropIndex].editedUrl = previewItems[activeCropIndex].baseUrl;
+    cropRect = null;
+    if (cropImage) {
+      cropImage.src = previewItems[activeCropIndex].editedUrl;
+    }
+    renderPreviewGrid();
+  });
+}
+
+if (cropRestartBtn) {
+  cropRestartBtn.addEventListener("click", () => {
+    if (activeCropIndex === null || !previewItems[activeCropIndex]) {
+      return;
+    }
+    cropRect = null;
+    cropStart = null;
+    const sourceUrl =
+      previewItems[activeCropIndex].fullUrl ||
+      previewItems[activeCropIndex].baseUrl;
+    if (cropImage) {
+      cropImage.src = sourceUrl;
+    }
+  });
+}
+
+if (cropModal) {
+  cropModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-crop-close]")) {
+      closeCropModal();
+    }
+  });
+}
+
+const setPreviewLoading = (loading) => {
+  if (!imgPreviewBtn) {
+    return;
+  }
+  imgPreviewBtn.disabled = loading;
+  imgPreviewBtn.textContent = loading ? "Procesando..." : "Previsualizar";
+};
+
+const setGenerateLoading = (loading) => {
+  if (!imgGenerateBtn) {
+    return;
+  }
+  imgGenerateBtn.disabled = loading || previewItems.length === 0;
+  imgGenerateBtn.textContent = loading ? "Generando..." : "Generar PDF";
+};
+
+if (imgPreviewBtn && imgForm) {
+  imgPreviewBtn.addEventListener("click", async () => {
+    if (!selectedFiles.length) {
+      showToast("Selecciona al menos una imagen.");
+      return;
+    }
+    const formData = new FormData(imgForm);
+    formData.set("enhance_mode", imgEnhanceSelect?.value || "soft");
+    setPreviewLoading(true);
+    try {
+      const response = await fetch("/tools/img-to-pdf/preview", {
+        method: "POST",
+        body: formData,
+        headers: {
+          "X-Requested-With": "fetch",
+          "X-CSRFToken": getImgPdfCsrf(),
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "No se pudo procesar las imagenes.");
+      }
+      previewItems = payload.previews.map((item) => ({
+        id: item.id,
+        baseUrl: item.data_url,
+        fullUrl: item.full_data_url || item.data_url,
+        editedUrl: item.data_url,
+      }));
+      renderPreviewGrid();
+    } catch (error) {
+      showToast(error.message);
+    } finally {
+      setPreviewLoading(false);
+    }
+  });
+}
+
+if (imgGenerateBtn) {
+  imgGenerateBtn.addEventListener("click", async () => {
+    if (!previewItems.length) {
+      return;
+    }
+    const filename = imgFilenameInput?.value || "";
+    setGenerateLoading(true);
+    try {
+      const response = await fetch("/tools/img-to-pdf/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch",
+          "X-CSRFToken": getImgPdfCsrf(),
+        },
+        body: JSON.stringify({
+          images: previewItems.map((item) => item.editedUrl),
+          filename,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload.error || "No se pudo generar el PDF.");
+      }
+      if (payload.row_html && imgTableBody) {
+        const wrapper = document.createElement("tbody");
+        wrapper.innerHTML = payload.row_html.trim();
+        const newRow = wrapper.querySelector("tr");
+        if (newRow) {
+          imgTableBody.prepend(newRow);
+        }
+      }
+      previewItems = [];
+      renderPreviewGrid();
+      selectedFiles = [];
+      syncFileInput();
+      renderUploadList();
+      if (imgFilenameInput) {
+        imgFilenameInput.value = "";
+      }
+      setGenerateLoading(false);
+      refreshImgTable();
+    } catch (error) {
+      showToast(error.message);
+      setGenerateLoading(false);
+    }
+  });
+}
+
+let imgRefreshTimer = null;
+const refreshImgTable = async () => {
+  if (!imgRefreshCard || !imgTableBody) {
+    return;
+  }
+  const url = imgRefreshCard.dataset.imgRefreshUrl;
+  const interval = Number.parseInt(
+    imgRefreshCard.dataset.imgRefreshInterval || "5000",
+    10
+  );
+  if (!url || Number.isNaN(interval)) {
+    return;
+  }
+  try {
+    const response = await fetch(url, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("refresh failed");
+    }
+    const payload = await response.json();
+    imgTableBody.innerHTML = payload.html;
+    if (payload.has_pending) {
+      imgRefreshTimer = setTimeout(refreshImgTable, interval);
+    } else {
+      imgRefreshTimer = null;
+    }
+  } catch (error) {
+    imgRefreshTimer = setTimeout(refreshImgTable, interval);
+  }
+};
+
+if (imgRefreshCard && imgTableBody) {
+  refreshImgTable();
 }

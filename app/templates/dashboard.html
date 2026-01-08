@@ -4,27 +4,34 @@
 <section class="hero">
   <div>
     <h1>Dashboard general</h1>
-    <p>Resumen de actividad para IMG_to_PDF y RPA_Enargas.</p>
+    <p>Resumen de actividad reciente.</p>
   </div>
 </section>
 
 <section class="grid">
   <div class="card">
-    <h2>IMG_to_PDF recientes</h2>
+    <h2>Images recientes</h2>
     <table>
       <thead>
         <tr>
           <th>Archivo</th>
-          <th>Paginas</th>
+          <th>Imagenes</th>
           <th>Estado</th>
         </tr>
       </thead>
       <tbody>
         {% for job in img_jobs %}
+        {% set status_labels = {
+          "queued": "En cola",
+          "processing": "Procesando",
+          "pending": "En cola",
+          "done": "Completado",
+          "error": "Error"
+        } %}
         <tr>
           <td>{{ job.filename }}</td>
           <td>{{ job.page_count }}</td>
-          <td><span class="badge {{ job.status }}">{{ job.status }}</span></td>
+          <td><span class="badge {{ job.status }}">{{ status_labels.get(job.status, job.status) }}</span></td>
         </tr>
         {% else %}
         <tr>
@@ -36,7 +43,7 @@
   </div>
 
   <div class="card">
-    <h2>RPA_Enargas recientes</h2>
+    <h2>Proceso Enargas recientes</h2>
     <table>
       <thead>
         <tr>

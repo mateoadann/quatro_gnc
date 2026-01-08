@@ -1,0 +1,38 @@
+{% set status_labels = {
+  "queued": "En cola",
+  "processing": "Procesando",
+  "pending": "En cola",
+  "done": "Completado",
+  "error": "Error"
+} %}
+{% for job in jobs %}
+<tr>
+  <td>{{ job.filename }}</td>
+  <td>{{ job.page_count }}</td>
+  <td><span class="badge {{ job.status }}">{{ status_labels.get(job.status, job.status) }}</span></td>
+  <td>
+    {% if job.status == 'done' and job.pdf_data %}
+      <a class="ghost-btn icon-btn img-icon" href="{{ url_for('main.img_to_pdf_view', job_id=job.id) }}" aria-label="Previsualizar PDF" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path
+            d="M6 2h8l4 4v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm8 1.5V7h3.5L14 3.5zM8 11h8v2H8v-2zm0 4h8v2H8v-2z"
+            fill="currentColor"
+          />
+        </svg>
+      </a>
+      <a class="ghost-btn icon-btn img-icon" href="{{ url_for('main.img_to_pdf_download', job_id=job.id) }}" aria-label="Descargar PDF">
+        <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+          <path
+            d="M12 3a1 1 0 0 1 1 1v8.6l2.3-2.3a1 1 0 1 1 1.4 1.4l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.4L11 12.6V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z"
+            fill="currentColor"
+          />
+        </svg>
+      </a>
+    {% elif job.status == 'error' %}
+      <span class="muted" title="{{ job.error_message or 'Error al generar el PDF' }}">Error</span>
+    {% else %}
+      <span class="muted">-</span>
+    {% endif %}
+  </td>
+</tr>
+{% endfor %}
