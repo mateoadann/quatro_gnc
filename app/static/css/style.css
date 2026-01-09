@@ -755,6 +755,28 @@ input {
   z-index: 1;
 }
 
+.modal-card--wide {
+  width: min(720px, 94vw);
+}
+
+.error-detail {
+  margin: 12px 0 0;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff7ee;
+  color: var(--ink);
+  font-size: 0.9rem;
+  max-height: 50vh;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.ghost-btn.small-btn {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

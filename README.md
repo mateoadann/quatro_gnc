@@ -3,7 +3,7 @@
 Primeros pasos para un dashboard Flask con dos herramientas: IMG_to_PDF y RPA_Enargas.
 
 ## Features incluidas
-- Login/logout con Keycloak (OIDC).
+- Login/logout con usuarios locales (Flask-Login).
 - Layout responsivo con navbar para alternar herramientas.
 - Seccion de usuario para editar credenciales Enargas.
 - Conexion a Postgres con SQLAlchemy y tablas iniciales.
@@ -61,8 +61,14 @@ En otra terminal, iniciar el worker RQ:
 python worker.py
 ```
 
-Login con Keycloak:
-- Usar un usuario creado en el realm configurado.
+Login:
+- Usar el usuario local creado con `seed-db` o uno cargado en la base.
+
+## Seguridad (produccion)
+- Setear `APP_ENV=production`.
+- Usar valores reales para `SECRET_KEY` y `ENCRYPTION_KEY`.
+- `SESSION_COOKIE_SECURE=true` y `SESSION_TYPE=redis`.
+- `ALLOW_SEED_DEMO=false` para evitar usuarios/demo.
 
 ## Docker
 
@@ -90,20 +96,6 @@ El codigo de ambas herramientas debe integrarse en:
 
 Luego se puede conectar la logica a nuevos endpoints en `app/routes.py`.
 
-## Keycloak
-Se dejaron variables de entorno en `.env.example` para integrar el flujo OIDC.
-La app usa el formulario propio y valida credenciales contra Keycloak con **Direct Access Grants**.
-
-Pasos recomendados:
-1) En Keycloak, crear un cliente "Confidential" con:
-   - Direct Access Grants: **ON**
-   - Standard Flow: **OFF** (opcional)
-   - Redirect URI: `http://localhost:5000/auth/keycloak/callback` (opcional si habilitas SSO)
-   - Post logout redirect URI: `http://localhost:5000/login`
-2) En `.env`, configurar:
-   - `KEYCLOAK_ENABLED=true`
-   - `KEYCLOAK_BASE_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`
-   - `KEYCLOAK_REDIRECT_URI` y `KEYCLOAK_POST_LOGOUT_REDIRECT_URI` si son distintos
-   - En produccion: `SESSION_COOKIE_SECURE=true`
-
-La app crea usuarios locales si `KEYCLOAK_AUTO_PROVISION=true`.
+## Usuarios locales
+- Los usuarios se guardan en la base local con password hash.
+- En desarrollo podes crear uno con `seed-db` o insertarlo manualmente.

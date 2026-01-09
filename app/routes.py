@@ -77,6 +77,35 @@ def _render_proceso_row(proceso):
     )
 
 
+def _mark_stale_processes(user_id: int | None = None) -> int:
+    minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
+    if minutes <= 0:
+        return 0
+
+    threshold = datetime.utcnow() - timedelta(minutes=minutes)
+    query = Proceso.query.filter(Proceso.estado == "en proceso")
+    if user_id is not None:
+        query = query.filter(Proceso.user_id == user_id)
+
+    stale_filter = or_(
+        Proceso.updated_at < threshold,
+        (Proceso.updated_at.is_(None) & (Proceso.created_at < threshold)),
+    )
+    query = query.filter(stale_filter)
+    updated = query.update(
+        {
+            Proceso.estado: "error",
+            Proceso.resultado: None,
+            Proceso.error_message: "Tiempo de espera agotado. Reintentar.",
+            Proceso.updated_at: datetime.utcnow(),
+        },
+        synchronize_session=False,
+    )
+    if updated:
+        db.session.commit()
+    return updated
+
+
 @main.route("/")
 @login_required
 def dashboard():
@@ -110,8 +139,9 @@ def img_to_pdf_preview():
         return jsonify({"error": "Debes subir al menos una imagen."}), 400
 
     enhance_mode = request.form.get("enhance_mode", "soft")
+    file_keys = request.form.getlist("file_keys") or None
     try:
-        previews = build_previews(files, enhance_mode=enhance_mode)
+        previews = build_previews(files, enhance_mode=enhance_mode, file_keys=file_keys)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     except Exception:
@@ -320,8 +350,10 @@ def rpa_enargas():
         flash("Proceso en cola. Se actualizara cuando finalice.", "success")
         return redirect(url_for("main.rpa_enargas"))
 
+    _mark_stale_processes(current_user.id)
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
+    stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
         Proceso.query.outerjoin(Taller)
@@ -336,7 +368,7 @@ def rpa_enargas():
         .first()
         is not None
     )
-    stale_ids = _get_stale_ids(procesos, minutes=10)
+    stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
     talleres = (
         Taller.query.filter_by(user_id=current_user.id)
         .order_by(Taller.nombre.asc())
@@ -366,8 +398,10 @@ def rpa_enargas():
 @main.route("/tools/rpa-enargas/table")
 @login_required
 def rpa_enargas_table():
+    _mark_stale_processes(current_user.id)
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
+    stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
         Proceso.query.outerjoin(Taller)
@@ -382,7 +416,7 @@ def rpa_enargas_table():
         .first()
         is not None
     )
-    stale_ids = _get_stale_ids(procesos, minutes=10)
+    stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
     html = render_template(
         "partials/rpa_enargas_rows.html",
         procesos=procesos,

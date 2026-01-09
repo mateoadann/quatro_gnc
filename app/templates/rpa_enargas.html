@@ -11,7 +11,7 @@
 <section class="grid two-col">
   <div class="card">
     <h2>Nueva consulta</h2>
-    <form class="form-grid" method="post">
+    <form class="form-grid" id="rpa-form" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <div class="form-row">
         <label class="form-field">
@@ -89,6 +89,7 @@
         <li><strong>Prueba Hidraulica:</strong> requiere prueba previa.</li>
         <li><strong>Patente NO registrada:</strong> no figura en ENARGAS.</li>
         <li><strong>Sesión Activa:</strong> esperar y reintentar.</li>
+        <li><strong>Credenciales inválidas:</strong> revisar usuario de Enargas.</li>
       </ul>
     </div>
   </div>
@@ -199,6 +200,14 @@
               >
                 Sesión activa
               </button>
+              <button
+                class="chip {% if filters.resultado == 'Credenciales inválidas' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Credenciales inválidas"
+              >
+                Credenciales
+              </button>
             </div>
             <label class="filter-field">
               Fecha desde
@@ -241,4 +250,16 @@
     </div>
   </div>
 </section>
+
+<div class="modal" id="rpa-error-modal" aria-hidden="true">
+  <div class="modal-overlay" data-error-close></div>
+  <div class="modal-card modal-card--wide" role="dialog" aria-modal="true" aria-labelledby="rpa-error-title">
+    <h3 id="rpa-error-title">Detalle del error</h3>
+    <p class="muted">Copia este detalle si necesitas soporte.</p>
+    <pre class="error-detail" id="rpa-error-detail"></pre>
+    <div class="modal-actions">
+      <button class="ghost-btn" type="button" data-error-close>Cerrar</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

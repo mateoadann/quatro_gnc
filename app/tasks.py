@@ -55,12 +55,23 @@ def process_rpa_job(proceso_id: int) -> None:
             proceso.pdf_data = None
             proceso.pdf_filename = None
             proceso.error_message = "Reintentar"
-        except Exception:
-            proceso.estado = "error"
-            proceso.resultado = None
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            proceso.error_message = _format_error()
+        except Exception as exc:
+            message = str(exc or "").lower()
+            if "credenciales invalidas" in message:
+                proceso.estado = "completado"
+                proceso.resultado = "Credenciales inválidas"
+                proceso.pdf_data = None
+                proceso.pdf_filename = None
+                proceso.error_message = (
+                    "Credenciales de Enargas inválidas. "
+                    "Revisa Usuario > Credenciales."
+                )
+            else:
+                proceso.estado = "error"
+                proceso.resultado = None
+                proceso.pdf_data = None
+                proceso.pdf_filename = None
+                proceso.error_message = _format_error()
 
         db.session.commit()
 

@@ -8,10 +8,16 @@
   </td>
   <td>{{ proceso.resultado or "-" }}</td>
   <td>
-    {% if proceso.error_message %}
-      <span title="{{ proceso.error_message }}">
-        {{ proceso.error_message[:80] }}{% if proceso.error_message|length > 80 %}...{% endif %}
-      </span>
+    {% if proceso.error_message and proceso.estado == 'error' %}
+      <button
+        class="ghost-btn small-btn"
+        type="button"
+        data-error-detail='{{ proceso.error_message|tojson }}'
+      >
+        Ver
+      </button>
+    {% elif proceso.error_message %}
+      <span>{{ proceso.error_message }}</span>
     {% elif proceso.id in (stale_ids or []) %}
       <span class="muted">Sin actividad. Reintentar.</span>
     {% else %}

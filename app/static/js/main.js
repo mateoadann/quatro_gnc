@@ -1,11 +1,12 @@
 const flashMessages = document.querySelectorAll(".flash");
 flashMessages.forEach((message) => {
+  const delay = message.classList.contains("error") ? 12000 : 3500;
   setTimeout(() => {
     message.classList.add("dismissed");
     setTimeout(() => {
       message.remove();
     }, 250);
-  }, 3500);
+  }, delay);
 });
 
 const ensureToastStack = () => {
@@ -19,7 +20,7 @@ const ensureToastStack = () => {
   return stack;
 };
 
-const showToast = (message, type = "error") => {
+const showToast = (message, type = "error", durationMs = 4200) => {
   const stack = ensureToastStack();
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
@@ -41,7 +42,24 @@ const showToast = (message, type = "error") => {
     setTimeout(() => {
       toast.remove();
     }, 200);
-  }, 4200);
+  }, durationMs);
+};
+
+const safeJson = async (response) => {
+  const contentType = response.headers.get("content-type") || "";
+  if (response.redirected) {
+    window.location.href = response.url;
+    throw new Error("Sesion expirada. Inicia sesion.");
+  }
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    if (text.toLowerCase().includes("<!doctype") || text.toLowerCase().includes("<html")) {
+      window.location.href = "/login";
+      throw new Error("Sesion expirada. Inicia sesion.");
+    }
+    throw new Error("Respuesta inesperada del servidor.");
+  }
+  return response.json();
 };
 
 const normalizedInputs = document.querySelectorAll(
@@ -121,7 +139,7 @@ const refreshTable = async () => {
     if (!response.ok) {
       throw new Error("refresh failed");
     }
-    const payload = await response.json();
+    const payload = await safeJson(response);
     refreshBody.innerHTML = payload.html;
     if (payload.pagination !== undefined) {
       if (refreshPagination) {
@@ -201,7 +219,10 @@ const createOptimisticRow = (patente, tallerName, placeholderId) => {
   return row;
 };
 
-const rpaForm = document.querySelector("form.form-grid");
+const rpaForm = document.querySelector("#rpa-form");
+const loginForm = document.querySelector("[data-login-form]");
+const rpaErrorModal = document.querySelector("#rpa-error-modal");
+const rpaErrorDetail = document.querySelector("#rpa-error-detail");
 const patenteInput = rpaForm?.querySelector("input[name='patente']");
 const tallerSelect = rpaForm?.querySelector("#taller-select");
 const tallerNewInput = rpaForm?.querySelector("#taller-name");
@@ -327,7 +348,7 @@ if (rpaForm) {
         },
         body: formData,
       });
-      const payload = await response.json();
+      const payload = await safeJson(response);
       if (!response.ok) {
         throw new Error(payload.error || "Error al crear proceso.");
       }
@@ -377,8 +398,21 @@ if (rpaForm) {
       if (placeholder) {
         placeholder.remove();
       }
-      showToast(error.message);
+      const longer =
+        /patente|formato/i.test(error.message || "") ? 6000 : 4200;
+      showToast(error.message, "error", longer);
     }
+  });
+}
+
+if (loginForm) {
+  loginForm.addEventListener("submit", () => {
+    const submitBtn = loginForm.querySelector("button[type='submit']");
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Ingresando...";
+    }
+    loginForm.setAttribute("aria-busy", "true");
   });
 }
 
@@ -416,7 +450,7 @@ if (refreshBody) {
         },
         body: formData,
       });
-      const payload = await response.json();
+      const payload = await safeJson(response);
       if (!response.ok) {
         throw new Error(payload.error || "Error al reintentar.");
       }
@@ -434,6 +468,47 @@ if (refreshBody) {
         row.classList.remove("pending-row");
       }
       showToast(error.message);
+    }
+  });
+}
+
+const openRpaErrorModal = (detail) => {
+  if (!rpaErrorModal || !rpaErrorDetail) {
+    return;
+  }
+  rpaErrorDetail.textContent = detail || "Sin detalle disponible.";
+  rpaErrorModal.classList.add("is-open");
+  rpaErrorModal.setAttribute("aria-hidden", "false");
+};
+
+const closeRpaErrorModal = () => {
+  if (!rpaErrorModal) {
+    return;
+  }
+  rpaErrorModal.classList.remove("is-open");
+  rpaErrorModal.setAttribute("aria-hidden", "true");
+};
+
+if (refreshBody) {
+  refreshBody.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-error-detail]");
+    if (!button) {
+      return;
+    }
+    let detail = button.dataset.errorDetail || "";
+    try {
+      detail = JSON.parse(detail);
+    } catch (error) {
+      // Keep raw detail if JSON parsing fails.
+    }
+    openRpaErrorModal(detail);
+  });
+}
+
+if (rpaErrorModal) {
+  rpaErrorModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-error-close]")) {
+      closeRpaErrorModal();
     }
   });
 }
@@ -803,7 +878,7 @@ const updateSessionStatus = async () => {
     if (!response.ok) {
       throw new Error("status failed");
     }
-    const payload = await response.json();
+    const payload = await safeJson(response);
     lastSessionPayload = payload;
     renderSessionStatus(payload);
   } catch (error) {
@@ -917,18 +992,29 @@ const CROP_MAX_WIDTH = 680;
 const CROP_MAX_HEIGHT = 520;
 const MAX_IMG_FILES = 6;
 let selectedFiles = [];
+const buildFileKey = (file) => `${file.name}_${file.size}_${file.lastModified}`;
 
 if (imgFileInput) {
+  imgFileInput.addEventListener("click", (event) => {
+    if (selectedFiles.length >= MAX_IMG_FILES) {
+      event.preventDefault();
+      showToast(
+        `Ya alcanzaste el limite de ${MAX_IMG_FILES} imagenes.`,
+        "error",
+        5200
+      );
+    }
+  });
   imgFileInput.addEventListener("change", () => {
     const incoming = Array.from(imgFileInput.files || []);
     if (!incoming.length) {
       return;
     }
     const existingKeys = new Set(
-      selectedFiles.map((file) => `${file.name}_${file.size}_${file.lastModified}`)
+      selectedFiles.map((file) => buildFileKey(file))
     );
     incoming.forEach((file) => {
-      const key = `${file.name}_${file.size}_${file.lastModified}`;
+      const key = buildFileKey(file);
       if (!existingKeys.has(key)) {
         selectedFiles.push(file);
         existingKeys.add(key);
@@ -940,8 +1026,13 @@ if (imgFileInput) {
     }
     syncFileInput();
     renderUploadList();
-    previewItems = [];
-    renderPreviewGrid();
+    if (previewItems.length) {
+      const nextKeys = new Set(selectedFiles.map((file) => buildFileKey(file)));
+      previewItems = previewItems.filter(
+        (item) => item.sourceKey && nextKeys.has(item.sourceKey)
+      );
+      renderPreviewGrid();
+    }
   });
 }
 
@@ -958,7 +1049,12 @@ if (imgUploadList) {
     selectedFiles.splice(index, 1);
     syncFileInput();
     renderUploadList();
-    previewItems = [];
+    if (previewItems.length) {
+      const nextKeys = new Set(selectedFiles.map((file) => buildFileKey(file)));
+      previewItems = previewItems.filter(
+        (item) => item.sourceKey && nextKeys.has(item.sourceKey)
+      );
+    }
     renderPreviewGrid();
   });
 }
@@ -1158,8 +1254,14 @@ if (cropApplyBtn) {
     }
     ctx.drawImage(cropImage, sx, sy, sw, sh, 0, 0, output.width, output.height);
     previewItems[activeCropIndex].editedUrl = output.toDataURL("image/png");
+    cropRect = null;
+    cropStart = null;
+    if (cropImage) {
+      cropImage.src = previewItems[activeCropIndex].editedUrl;
+    } else {
+      drawCropCanvas();
+    }
     renderPreviewGrid();
-    closeCropModal();
   });
 }
 
@@ -1272,8 +1374,23 @@ if (imgPreviewBtn && imgForm) {
       showToast("Selecciona al menos una imagen.");
       return;
     }
-    const formData = new FormData(imgForm);
+    const currentKeys = new Set(
+      previewItems.map((item) => item.sourceKey).filter(Boolean)
+    );
+    const pendingFiles = selectedFiles.filter(
+      (file) => !currentKeys.has(buildFileKey(file))
+    );
+    if (!pendingFiles.length && previewItems.length) {
+      showToast("No hay nuevas imagenes para previsualizar.", "info", 3600);
+      return;
+    }
+    const formData = new FormData();
     formData.set("enhance_mode", imgEnhanceSelect?.value || "soft");
+    const filesToSend = pendingFiles.length ? pendingFiles : selectedFiles;
+    filesToSend.forEach((file) => {
+      formData.append("images", file);
+      formData.append("file_keys", buildFileKey(file));
+    });
     setPreviewLoading(true);
     try {
       const response = await fetch("/tools/img-to-pdf/preview", {
@@ -1284,16 +1401,29 @@ if (imgPreviewBtn && imgForm) {
           "X-CSRFToken": getImgPdfCsrf(),
         },
       });
-      const payload = await response.json();
+      const payload = await safeJson(response);
       if (!response.ok) {
         throw new Error(payload.error || "No se pudo procesar las imagenes.");
       }
-      previewItems = payload.previews.map((item) => ({
+      const newItems = payload.previews.map((item) => ({
         id: item.id,
+        sourceKey: item.source_key || null,
         baseUrl: item.data_url,
         fullUrl: item.full_data_url || item.data_url,
         editedUrl: item.data_url,
       }));
+      const combined = previewItems.concat(newItems);
+      const ordered = [];
+      const orderedKeys = selectedFiles.map((file) => buildFileKey(file));
+      orderedKeys.forEach((key) => {
+        combined
+          .filter((item) => item.sourceKey === key)
+          .forEach((item) => ordered.push(item));
+      });
+      combined
+        .filter((item) => !item.sourceKey)
+        .forEach((item) => ordered.push(item));
+      previewItems = ordered;
       renderPreviewGrid();
     } catch (error) {
       showToast(error.message);
@@ -1323,7 +1453,7 @@ if (imgGenerateBtn) {
           filename,
         }),
       });
-      const payload = await response.json();
+      const payload = await safeJson(response);
       if (!response.ok) {
         throw new Error(payload.error || "No se pudo generar el PDF.");
       }
@@ -1370,7 +1500,7 @@ const refreshImgTable = async () => {
     if (!response.ok) {
       throw new Error("refresh failed");
     }
-    const payload = await response.json();
+    const payload = await safeJson(response);
     imgTableBody.innerHTML = payload.html;
     if (payload.has_pending) {
       imgRefreshTimer = setTimeout(refreshImgTable, interval);

@@ -3,9 +3,10 @@ import os
 
 import click
 from flask import Flask
+from flask_login import current_user
 
 from .config import Config
-from .extensions import csrf, db, login_manager, oauth
+from .extensions import csrf, db, login_manager, session_store
 from .models import EnargasCredentials, ImgToPdfJob, Proceso, RpaEnargasJob, User
 
 
@@ -14,19 +15,26 @@ def create_app():
 
     app = Flask(__name__)
     app.config.from_object(Config)
+    _validate_security_config(app)
 
     db.init_app(app)
     login_manager.init_app(app)
-    oauth.init_app(app)
     csrf.init_app(app)
-
-    _register_keycloak(app)
+    session_store.init_app(app)
 
     from .auth import auth
     from .routes import main
 
     app.register_blueprint(auth)
     app.register_blueprint(main)
+
+    @app.after_request
+    def _prevent_cache(response):
+        if current_user.is_authenticated and response.mimetype == "text/html":
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
     @app.cli.command("init-db")
     def init_db():
@@ -42,6 +50,20 @@ def create_app():
         click.echo("Database seeded")
 
     return app
+
+
+def _validate_security_config(app):
+    if not app.config.get("IS_PRODUCTION"):
+        return
+
+    if app.config.get("SECRET_KEY") in ("", "dev-secret-change"):
+        raise RuntimeError("SECRET_KEY debe configurarse en produccion.")
+    if not app.config.get("ENCRYPTION_KEY"):
+        raise RuntimeError("ENCRYPTION_KEY debe configurarse en produccion.")
+    if not app.config.get("SESSION_COOKIE_SECURE"):
+        raise RuntimeError("SESSION_COOKIE_SECURE debe ser true en produccion.")
+    if app.config.get("SESSION_TYPE") == "filesystem":
+        raise RuntimeError("SESSION_TYPE no puede ser filesystem en produccion.")
 
 
 def _configure_logging():
@@ -60,35 +82,19 @@ def _configure_logging():
         root.addHandler(handler)
 
 
-def _register_keycloak(app):
-    if not app.config.get("KEYCLOAK_ENABLED"):
-        return
-
-    base_url = app.config.get("KEYCLOAK_BASE_URL", "").rstrip("/")
-    realm = app.config.get("KEYCLOAK_REALM", "").strip()
-    client_id = app.config.get("KEYCLOAK_CLIENT_ID", "").strip()
-    if not base_url or not realm or not client_id:
-        return
-
-    metadata_url = f"{base_url}/realms/{realm}/.well-known/openid-configuration"
-    oauth.register(
-        name="keycloak",
-        client_id=client_id,
-        client_secret=app.config.get("KEYCLOAK_CLIENT_SECRET", ""),
-        server_metadata_url=metadata_url,
-        client_kwargs={
-            "scope": app.config.get("KEYCLOAK_SCOPE", "openid email profile")
-        },
-    )
-
-
 def _seed_data(app):
-    default_user = User.query.filter_by(
-        username=app.config["DEFAULT_ADMIN_USER"]
-    ).first()
+    if not app.config.get("ALLOW_SEED_DEMO"):
+        return
+
+    admin_user = app.config.get("DEFAULT_ADMIN_USER")
+    admin_password = app.config.get("DEFAULT_ADMIN_PASSWORD")
+    if not admin_user or not admin_password:
+        return
+
+    default_user = User.query.filter_by(username=admin_user).first()
     if not default_user:
-        default_user = User(username=app.config["DEFAULT_ADMIN_USER"])
-        default_user.set_password(app.config["DEFAULT_ADMIN_PASSWORD"])
+        default_user = User(username=admin_user)
+        default_user.set_password(admin_password)
         db.session.add(default_user)
         db.session.commit()
 

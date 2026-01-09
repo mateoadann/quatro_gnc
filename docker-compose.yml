@@ -8,22 +8,14 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=change-me
-      - DEFAULT_ADMIN_USER=admin
-      - DEFAULT_ADMIN_PASSWORD=admin123
-      - KEYCLOAK_ENABLED=true
-      - KEYCLOAK_BASE_URL=http://keycloak:8080
-      - KEYCLOAK_REALM=quatro
-      - KEYCLOAK_CLIENT_ID=quatro_gnc
-      - KEYCLOAK_CLIENT_SECRET=f4MxWyUHjhsau6drhPdV85uzaekFgbYO
-      - KEYCLOAK_REDIRECT_URI=http://localhost:5001/auth/keycloak/callback
-      - KEYCLOAK_POST_LOGOUT_REDIRECT_URI=http://localhost:5001/login
+      - SECRET_KEY= mCzMpq_2bYpozbn2q6RFfgaA1cyG5-DWCc3ImJkTl7g
+      - DEFAULT_ADMIN_USER=taller_admin
+      - DEFAULT_ADMIN_PASSWORD=taller_admin_password
       - RPA_HEADLESS=true
       - GUNICORN_CMD_ARGS=--timeout 120 --keep-alive 5 --access-logfile - --error-logfile -
     depends_on:
       - db
       - redis
-      - keycloak
 
   worker:
     build: .
@@ -33,21 +25,13 @@ services:
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc
       - REDIS_URL=redis://redis:6379/0
-      - SECRET_KEY=change-me
-      - DEFAULT_ADMIN_USER=admin
-      - DEFAULT_ADMIN_PASSWORD=admin123
-      - KEYCLOAK_ENABLED=true
-      - KEYCLOAK_BASE_URL=http://keycloak:8080
-      - KEYCLOAK_REALM=quatro
-      - KEYCLOAK_CLIENT_ID=quatro_gnc
-      - KEYCLOAK_CLIENT_SECRET=f4MxWyUHjhsau6drhPdV85uzaekFgbYO
-      - KEYCLOAK_REDIRECT_URI=http://localhost:5001/auth/keycloak/callback
-      - KEYCLOAK_POST_LOGOUT_REDIRECT_URI=http://localhost:5001/login
+      - SECRET_KEY= mCzMpq_2bYpozbn2q6RFfgaA1cyG5-DWCc3ImJkTl7g
+      - DEFAULT_ADMIN_USER=taller_admin
+      - DEFAULT_ADMIN_PASSWORD=taller_admin_password
       - RPA_HEADLESS=true
     depends_on:
       - db
       - redis
-      - keycloak
 
   db:
     image: postgres:16
@@ -61,30 +45,5 @@ services:
   redis:
     image: redis:7-alpine
 
-  keycloak:
-    image: quay.io/keycloak/keycloak:24.0.4
-    command: ["start-dev"]
-    ports:
-      - "8080:8080"
-    environment:
-      - KEYCLOAK_ADMIN=admin
-      - KEYCLOAK_ADMIN_PASSWORD=admin
-      - KC_DB=postgres
-      - KC_DB_URL=jdbc:postgresql://keycloak-db:5432/keycloak
-      - KC_DB_USERNAME=keycloak
-      - KC_DB_PASSWORD=keycloak
-    depends_on:
-      - keycloak-db
-
-  keycloak-db:
-    image: postgres:16
-    environment:
-      - POSTGRES_USER=keycloak
-      - POSTGRES_PASSWORD=keycloak
-      - POSTGRES_DB=keycloak
-    volumes:
-      - keycloak_data:/var/lib/postgresql/data
-
 volumes:
   postgres_data:
-  keycloak_data:

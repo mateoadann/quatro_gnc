@@ -110,7 +110,10 @@ async def wait_login_result(page, timeout_ms: int = 10000) -> None:
         re.compile(r"ya\s+se\s+encu?entra\s+logueado", re.I)
     )
     invalid_alert = page.locator(".alert, [role='alert']").filter(
-        has_text=re.compile(r"incorrect|invalida|no\s+coincide", re.I)
+        has_text=re.compile(
+            r"incorrect|invalida|no\s+coincide|no\s+fue\s+dado\s+de\s+alta",
+            re.I,
+        )
     )
 
     end = time.monotonic() + (timeout_ms / 1000)

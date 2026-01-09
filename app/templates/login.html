@@ -6,7 +6,7 @@
     <div class="card-header">
       <h1>Ingreso al dashboard</h1>
     </div>
-    <form method="post" class="form-grid">
+    <form method="post" class="form-grid" data-login-form>
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <label>
         Usuario
@@ -51,9 +51,6 @@
       </label>
       <button type="submit" class="primary-btn">Ingresar</button>
     </form>
-    {% if not keycloak_enabled %}
-    <p class="muted">Keycloak no esta configurado. Contacta al administrador.</p>
-    {% endif %}
   </div>
   <div class="auth-aside">
     <h2>Operaciones en un solo lugar</h2>

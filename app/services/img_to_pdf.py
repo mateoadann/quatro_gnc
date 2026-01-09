@@ -75,13 +75,20 @@ def validate_upload(file_storage) -> None:
         raise ValueError(f"Archivo excede {MAX_FILE_MB}MB.")
 
 
-def build_previews(files, enhance_mode: str = "soft") -> list[dict]:
+def build_previews(
+    files, enhance_mode: str = "soft", file_keys: list[str] | None = None
+) -> list[dict]:
     previews: list[dict] = []
     processed_images: list[np.ndarray] = []
 
-    for file_storage in files:
+    for idx, file_storage in enumerate(files):
         validate_upload(file_storage)
         data = file_storage.read()
+        source_key = None
+        if file_keys and idx < len(file_keys):
+            source_key = file_keys[idx]
+        if not source_key:
+            source_key = file_storage.filename or str(idx)
         image = _decode_image_bytes(data)
         full_processed = _enhance_full_image(image, enhance_mode)
         full_data_url = data_url_from_png(_encode_image_png(full_processed))
@@ -106,6 +113,7 @@ def build_previews(files, enhance_mode: str = "soft") -> list[dict]:
             previews.append(
                 {
                     "id": len(previews),
+                    "source_key": source_key,
                     "data_url": data_url_from_png(_encode_image_png(doc)),
                     "full_data_url": full_data_url,
                     "width": doc.shape[1],

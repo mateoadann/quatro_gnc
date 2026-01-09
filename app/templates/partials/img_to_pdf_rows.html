@@ -1,15 +1,16 @@
-{% set status_labels = {
-  "queued": "En cola",
-  "processing": "Procesando",
-  "pending": "En cola",
-  "done": "Completado",
-  "error": "Error"
+{% set status_map = {
+  "queued": ("En proceso", "en-proceso"),
+  "processing": ("En proceso", "en-proceso"),
+  "pending": ("En proceso", "en-proceso"),
+  "done": ("Completado", "completado"),
+  "error": ("Error", "error")
 } %}
 {% for job in jobs %}
+{% set label, css_class = status_map.get(job.status, (job.status, job.status)) %}
 <tr>
   <td>{{ job.filename }}</td>
   <td>{{ job.page_count }}</td>
-  <td><span class="badge {{ job.status }}">{{ status_labels.get(job.status, job.status) }}</span></td>
+  <td><span class="badge {{ css_class }}">{{ label }}</span></td>
   <td>
     {% if job.status == 'done' and job.pdf_data %}
       <a class="ghost-btn icon-btn img-icon" href="{{ url_for('main.img_to_pdf_view', job_id=job.id) }}" aria-label="Previsualizar PDF" target="_blank" rel="noopener">
@@ -29,7 +30,7 @@
         </svg>
       </a>
     {% elif job.status == 'error' %}
-      <span class="muted" title="{{ job.error_message or 'Error al generar el PDF' }}">Error</span>
+      <span class="muted">Error</span>
     {% else %}
       <span class="muted">-</span>
     {% endif %}
