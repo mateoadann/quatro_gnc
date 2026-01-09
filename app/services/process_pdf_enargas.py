@@ -163,6 +163,15 @@ def parse_fecha_consulta(value: str | None) -> datetime | None:
         return None
 
 
+def parse_fecha_vencimiento(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%d/%m/%Y")
+    except ValueError:
+        return None
+
+
 def parse_crpc_month(value: str) -> tuple[int, int] | None:
     match = re.search(r"(0?[1-9]|1[0-2])\s*/\s*([0-9]{2,4})", value)
     if not match:
@@ -176,21 +185,36 @@ def parse_crpc_month(value: str) -> tuple[int, int] | None:
     return year_value, month
 
 
-def compute_resultado(fecha_consulta: str | None, fechas_crpc: list[str]) -> str | None:
+def compute_resultado(
+    fecha_consulta: str | None,
+    fechas_crpc: list[str],
+    fecha_vencimiento: str | None,
+) -> str | None:
     consulta_dt = parse_fecha_consulta(fecha_consulta)
     if not consulta_dt or not fechas_crpc:
         return None
+    venc_dt = parse_fecha_vencimiento(fecha_vencimiento)
     consulta_months = consulta_dt.year * 12 + consulta_dt.month
+    min_months_until_ph = None
     for value in fechas_crpc:
         parsed = parse_crpc_month(value)
         if not parsed:
             continue
         year_value, month_value = parsed
         crpc_months = year_value * 12 + month_value
-        months_since = consulta_months - crpc_months
-        if months_since >= 54:
+        ph_due_months = crpc_months + 60
+        months_until_ph = ph_due_months - consulta_months
+        if min_months_until_ph is None or months_until_ph < min_months_until_ph:
+            min_months_until_ph = months_until_ph
+        if months_until_ph <= 6:
             return "Prueba Hidraulica"
-    return "Renovación de Oblea"
+    if venc_dt is None:
+        return "Renovación de Oblea"
+    if consulta_dt > venc_dt:
+        return "Renovación de Oblea"
+    if min_months_until_ph is None:
+        return None
+    return "Equipo Habilitado"
 
 
 def extract_label_values(lines: list[str]) -> dict[str, str]:
@@ -423,7 +447,7 @@ def parse_fields(text: str) -> dict[str, str | list[str] | bool | int | None]:
     fecha_crpc_values = [value for value in fecha_crpc_values if value]
     cant_cilindros = len(fecha_crpc_values)
     fecha_crpc = ", ".join(fecha_crpc_values) if fecha_crpc_values else None
-    resultado = compute_resultado(fecha_consulta, fecha_crpc_values)
+    resultado = compute_resultado(fecha_consulta, fecha_crpc_values, fecha_vencimiento)
 
     coincide = None
     if vehicle_fields.get("dominio") and consulta_dominio:
@@ -457,7 +481,11 @@ def probe_pdf(path: str) -> PdfTextProbe:
         if table_dates:
             fields["fecha_crpc"] = ", ".join(table_dates)
             fields["cant_cilindros"] = len(table_dates)
-            fields["resultado"] = compute_resultado(fields.get("fecha_consulta"), table_dates)
+            fields["resultado"] = compute_resultado(
+                fields.get("fecha_consulta"),
+                table_dates,
+                fields.get("fecha_vencimiento"),
+            )
     sample = text[:120].replace("\n", " ").strip()
     return PdfTextProbe(
         path=path,
@@ -479,7 +507,11 @@ def analyze_pdf_bytes(pdf_bytes: bytes) -> dict[str, str | list[str] | bool | in
     if table_dates:
         fields["fecha_crpc"] = ", ".join(table_dates)
         fields["cant_cilindros"] = len(table_dates)
-        fields["resultado"] = compute_resultado(fields.get("fecha_consulta"), table_dates)
+        fields["resultado"] = compute_resultado(
+            fields.get("fecha_consulta"),
+            table_dates,
+            fields.get("fecha_vencimiento"),
+        )
     return fields
 
 

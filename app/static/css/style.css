@@ -969,6 +969,41 @@ td {
   color: #a34343;
 }
 
+.badge.result-renovacion {
+  background: rgba(233, 185, 45, 0.22);
+  color: #a9740f;
+}
+
+.badge.result-habilitado {
+  background: rgba(11, 107, 111, 0.18);
+  color: var(--accent-strong);
+}
+
+.badge.result-hidraulica {
+  background: rgba(200, 106, 43, 0.2);
+  color: #98521f;
+}
+
+.badge.result-no-registrada {
+  background: rgba(111, 101, 87, 0.2);
+  color: var(--muted);
+}
+
+.badge.result-sesion {
+  background: rgba(66, 122, 191, 0.2);
+  color: #2f5d8f;
+}
+
+.badge.result-credenciales {
+  background: rgba(188, 60, 60, 0.15);
+  color: #a34343;
+}
+
+.badge.result-neutral {
+  background: #f0ebe2;
+  color: var(--muted);
+}
+
 .badge.en-proceso::after {
   content: "";
   position: absolute;

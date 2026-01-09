@@ -86,6 +86,7 @@
       <h3>Resultados</h3>
       <ul>
         <li><strong>Renovación de Oblea:</strong> apto para renovar.</li>
+        <li><strong>Equipo Habilitado:</strong> oblea vigente, sin PH cercana.</li>
         <li><strong>Prueba Hidraulica:</strong> requiere prueba previa.</li>
         <li><strong>Patente NO registrada:</strong> no figura en ENARGAS.</li>
         <li><strong>Sesión Activa:</strong> esperar y reintentar.</li>
@@ -175,6 +176,14 @@
                 data-chip-value="Renovación de Oblea"
               >
                 Renovación
+              </button>
+              <button
+                class="chip {% if filters.resultado == 'Equipo Habilitado' %}is-active{% endif %}"
+                type="button"
+                data-chip-group="resultado"
+                data-chip-value="Equipo Habilitado"
+              >
+                Habilitado
               </button>
               <button
                 class="chip {% if filters.resultado == 'Prueba Hidraulica' %}is-active{% endif %}"

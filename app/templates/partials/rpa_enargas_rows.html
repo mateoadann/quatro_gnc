@@ -1,4 +1,12 @@
 {% for proceso in procesos %}
+{% set resultado_map = {
+  "Renovación de Oblea": ("Renovación de Oblea", "result-renovacion"),
+  "Equipo Habilitado": ("Equipo Habilitado", "result-habilitado"),
+  "Prueba Hidraulica": ("Prueba Hidraulica", "result-hidraulica"),
+  "Patente NO registrada": ("Patente NO registrada", "result-no-registrada"),
+  "Sesión Activa": ("Sesión Activa", "result-sesion"),
+  "Credenciales inválidas": ("Credenciales inválidas", "result-credenciales")
+} %}
 <tr data-proceso-id="{{ proceso.id }}">
   <td>{{ proceso.created_at.strftime("%d/%m/%y") if proceso.created_at else "-" }}</td>
   <td>{{ proceso.patente }}</td>
@@ -6,9 +14,16 @@
   <td>
     <span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span>
   </td>
-  <td>{{ proceso.resultado or "-" }}</td>
   <td>
-    {% if proceso.error_message and proceso.estado == 'error' %}
+    {% if proceso.resultado %}
+      {% set result_label, result_class = resultado_map.get(proceso.resultado, (proceso.resultado, "result-neutral")) %}
+      <span class="badge {{ result_class }}">{{ result_label }}</span>
+    {% else %}
+      <span class="muted">-</span>
+    {% endif %}
+  </td>
+  <td>
+    {% if proceso.error_message %}
       <button
         class="ghost-btn small-btn"
         type="button"
@@ -16,8 +31,6 @@
       >
         Ver
       </button>
-    {% elif proceso.error_message %}
-      <span>{{ proceso.error_message }}</span>
     {% elif proceso.id in (stale_ids or []) %}
       <span class="muted">Sin actividad. Reintentar.</span>
     {% else %}
@@ -75,6 +88,7 @@
 
     {% if proceso.estado == 'error'
       or proceso.resultado == 'Sesión Activa'
+      or proceso.resultado == 'Credenciales inválidas'
       or proceso.id in (stale_ids or []) %}
     <form
       class="inline-form"
