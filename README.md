@@ -69,6 +69,9 @@ Login:
 - Usar valores reales para `SECRET_KEY` y `ENCRYPTION_KEY`.
 - `SESSION_COOKIE_SECURE=true` y `SESSION_TYPE=redis`.
 - `ALLOW_SEED_DEMO=false` para evitar usuarios/demo.
+- Rate limit y bloqueo por intentos fallidos en login:
+  - `LOGIN_RATE_LIMIT`, `LOGIN_RATE_WINDOW`
+  - `LOGIN_FAIL_LIMIT`, `LOGIN_LOCKOUT_SECONDS`
 
 ## Docker
 
