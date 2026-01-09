@@ -89,6 +89,27 @@ Si queres levantar solo algunos servicios:
 docker compose up --build web db redis
 ```
 
+## Reverse proxy con Nginx (pre-produccion)
+
+Incluye un contenedor `nginx` que expone el puerto 80 y reenvia al servicio `web`.
+
+1) Configura variables seguras en tu `.env` (no en el repo):
+```bash
+APP_ENV=production
+SECRET_KEY=...
+ENCRYPTION_KEY=...
+SESSION_TYPE=redis
+SESSION_COOKIE_SECURE=true
+```
+
+2) Levanta los servicios:
+```bash
+docker compose up --build
+```
+
+3) Cuando tengas el dominio y el certificado HTTPS, agrega los certificados
+en `./nginx/certs` y configura el bloque `server` en Nginx para el puerto 443.
+
 ## Integracion de herramientas
 El codigo de ambas herramientas debe integrarse en:
 - `app/services/img_to_pdf.py`

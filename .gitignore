@@ -8,3 +8,4 @@ __pycache__/
 debug/
 /app/services/img_pdf/dni-pdf-api
 /flask_session
+/nginx/certs/
