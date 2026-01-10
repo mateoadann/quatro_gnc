@@ -365,6 +365,75 @@ th.sortable.is-active.is-asc::after {
 .table-meta {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.danger-btn {
+  border-color: rgba(182, 35, 35, 0.6);
+  color: #b62323;
+  background: rgba(182, 35, 35, 0.08);
+}
+
+.danger-btn:hover {
+  background: rgba(182, 35, 35, 0.18);
+}
+
+.modal-actions.modal-actions--danger {
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.ghost-btn.neutral-btn {
+  background: #f5efe6;
+  border-color: #e2d4c6;
+  color: var(--ink);
+}
+
+.ghost-btn.neutral-btn:hover {
+  background: #efe4d6;
+  border-color: #d6c4b2;
+}
+
+.select-col {
+  width: 34px;
+  text-align: center;
+}
+
+.select-col input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.rpa-taller-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding: 6px 30px 6px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff6ec;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--ink);
+  min-width: 140px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 10px) 55%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+
+.rpa-taller-select:focus {
+  outline: 2px solid rgba(11, 107, 111, 0.25);
+  border-color: var(--accent);
+}
+
+.rpa-taller-select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .filter-drawer {
@@ -896,6 +965,28 @@ input:focus {
   border-color: var(--accent-2);
 }
 
+.ghost-btn.danger-btn {
+  border-color: rgba(182, 35, 35, 0.6);
+  color: #b62323;
+  background: rgba(182, 35, 35, 0.08);
+}
+
+.ghost-btn.danger-btn:hover {
+  border-color: rgba(182, 35, 35, 0.8);
+  background: rgba(182, 35, 35, 0.18);
+}
+
+.ghost-btn.success-btn {
+  border-color: rgba(46, 148, 86, 0.6);
+  color: #2e9456;
+  background: rgba(46, 148, 86, 0.1);
+}
+
+.ghost-btn.success-btn:hover {
+  border-color: rgba(46, 148, 86, 0.85);
+  background: rgba(46, 148, 86, 0.2);
+}
+
 .ghost-btn.wide {
   width: 100%;
 }
@@ -1082,6 +1173,11 @@ td {
 .toast.error {
   background: rgba(188, 60, 60, 0.15);
   border-color: rgba(188, 60, 60, 0.3);
+}
+
+.toast.success {
+  background: rgba(46, 148, 86, 0.15);
+  border-color: rgba(46, 148, 86, 0.35);
 }
 
 .toast__text {
