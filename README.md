@@ -123,3 +123,11 @@ Luego se puede conectar la logica a nuevos endpoints en `app/routes.py`.
 ## Usuarios locales
 - Los usuarios se guardan en la base local con password hash.
 - En desarrollo podes crear uno con `seed-db` o insertarlo manualmente.
+
+## GitHub
+Documentacion de ramas, protecciones y CI: `docs/github_workflow.md`.
+
+## Versionado y feature flags
+- Changelog: `CHANGELOG.md`
+- Versionado y releases: `docs/versioning.md`
+- Feature flags (SaaS): `docs/feature_flags.md`
