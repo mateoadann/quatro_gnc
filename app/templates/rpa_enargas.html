@@ -240,6 +240,7 @@
         </button>
         <span class="muted"><span id="rpa-count-label">Total</span>: <strong id="rpa-total-count" data-total="{{ total_count }}">{{ total_count }}</strong></span>
         <input type="hidden" id="rpa-delete-csrf" value="{{ csrf_token() }}" />
+        <input type="hidden" id="rpa-taller-csrf" value="{{ csrf_token() }}" />
       </div>
     </div>
     <table>
@@ -292,6 +293,18 @@
     <div class="modal-actions modal-actions--danger">
       <button class="ghost-btn danger-btn" type="button" id="rpa-delete-confirm">Eliminar</button>
       <button class="ghost-btn neutral-btn" type="button" data-delete-close>Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="rpa-taller-modal" aria-hidden="true">
+  <div class="modal-overlay" data-taller-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rpa-taller-title">
+    <h3 id="rpa-taller-title">Confirmar cambio de taller</h3>
+    <p class="muted" id="rpa-taller-message"></p>
+    <div class="modal-actions modal-actions--danger">
+      <button class="ghost-btn success-btn" type="button" id="rpa-taller-confirm">Guardar</button>
+      <button class="ghost-btn neutral-btn" type="button" data-taller-close>Cancelar</button>
     </div>
   </div>
 </div>

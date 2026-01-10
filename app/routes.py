@@ -70,10 +70,16 @@ def _wants_json() -> bool:
 
 
 def _render_proceso_row(proceso):
+    talleres = (
+        Taller.query.filter_by(user_id=proceso.user_id)
+        .order_by(Taller.nombre.asc())
+        .all()
+    )
     return render_template(
         "partials/rpa_enargas_rows.html",
         procesos=[proceso],
         stale_ids=set(),
+        talleres=talleres,
     )
 
 
@@ -375,11 +381,6 @@ def rpa_enargas():
         .order_by(Taller.nombre.asc())
         .all()
     )
-    talleres = (
-        Taller.query.filter_by(user_id=current_user.id)
-        .order_by(Taller.nombre.asc())
-        .all()
-    )
     filter_params = _build_filter_params(filters)
     total_count = _total
     return render_template(
@@ -419,10 +420,16 @@ def rpa_enargas_table():
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
+    talleres = (
+        Taller.query.filter_by(user_id=current_user.id)
+        .order_by(Taller.nombre.asc())
+        .all()
+    )
     html = render_template(
         "partials/rpa_enargas_rows.html",
         procesos=procesos,
         stale_ids=stale_ids,
+        talleres=talleres,
     )
     pagination = render_template(
         "partials/rpa_pagination.html",
@@ -478,6 +485,36 @@ def rpa_enargas_retry(proceso_id):
     flash("Proceso reencolado.", "success")
     return redirect(url_for("main.rpa_enargas"))
 
+
+@main.route("/tools/rpa-enargas/<int:proceso_id>/taller", methods=["POST"])
+@login_required
+def rpa_enargas_update_taller(proceso_id):
+    payload = request.get_json(silent=True) or {}
+    raw_taller_id = payload.get("taller_id")
+    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
+    if not proceso:
+        return jsonify({"error": "Proceso no encontrado."}), 404
+
+    if proceso.estado == "en proceso":
+        return jsonify({"error": "No se puede editar un proceso en curso."}), 400
+
+    if raw_taller_id in (None, "", 0, "0"):
+        proceso.taller_id = None
+        db.session.commit()
+        return jsonify({"taller_id": None, "taller_nombre": "Sin taller"})
+
+    try:
+        taller_id = int(raw_taller_id)
+    except (TypeError, ValueError):
+        return jsonify({"error": "Taller invalido."}), 400
+
+    taller = Taller.query.filter_by(id=taller_id, user_id=current_user.id).first()
+    if not taller:
+        return jsonify({"error": "Taller no encontrado."}), 404
+
+    proceso.taller_id = taller.id
+    db.session.commit()
+    return jsonify({"taller_id": taller.id, "taller_nombre": taller.nombre})
 
 @main.route("/tools/rpa-enargas/delete", methods=["POST"])
 @login_required

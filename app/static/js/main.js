@@ -125,7 +125,12 @@ const rpaDeleteCsrf = document.querySelector("#rpa-delete-csrf");
 const rpaDeleteModal = document.querySelector("#rpa-delete-modal");
 const rpaDeleteConfirm = document.querySelector("#rpa-delete-confirm");
 const rpaSelectAll = document.querySelector("#rpa-select-all");
+const rpaTallerCsrf = document.querySelector("#rpa-taller-csrf");
+const rpaTallerModal = document.querySelector("#rpa-taller-modal");
+const rpaTallerConfirm = document.querySelector("#rpa-taller-confirm");
+const rpaTallerMessage = document.querySelector("#rpa-taller-message");
 const selectedRpaIds = new Set();
+let pendingTallerChange = null;
 let refreshTimerId = null;
 
 const refreshTable = async () => {
@@ -545,6 +550,44 @@ if (refreshBody) {
     updateRpaSelectionUI();
   });
 
+  refreshBody.addEventListener("change", (event) => {
+    const select = event.target.closest(".rpa-taller-select");
+    if (!select) {
+      return;
+    }
+    const procesoId = select.dataset.procesoId;
+    const currentName = select.dataset.currentName || "Sin taller";
+    const currentId = select.dataset.currentId || "";
+    const nextId = select.value;
+    const nextName =
+      select.selectedOptions[0]?.textContent?.trim() || "Sin taller";
+
+    if (!procesoId) {
+      return;
+    }
+
+    if (nextId === currentId) {
+      return;
+    }
+
+    if (!rpaTallerModal || !rpaTallerMessage) {
+      select.value = currentId;
+      return;
+    }
+
+    pendingTallerChange = {
+      select,
+      procesoId,
+      nextId,
+      nextName,
+      currentId,
+      currentName,
+    };
+    rpaTallerMessage.textContent = `Cambiar "${currentName}" por "${nextName}"?`;
+    rpaTallerModal.classList.add("is-open");
+    rpaTallerModal.setAttribute("aria-hidden", "false");
+  });
+
   refreshBody.addEventListener("submit", async (event) => {
     const form = event.target.closest("form");
     if (!form || !form.action.includes("/retry")) {
@@ -660,6 +703,60 @@ if (rpaDeleteConfirm) {
   rpaDeleteConfirm.addEventListener("click", async () => {
     await deleteSelectedProcesos();
     closeRpaDeleteModal();
+  });
+}
+
+const closeRpaTallerModal = (revert = true) => {
+  if (!rpaTallerModal) {
+    return;
+  }
+  if (revert && pendingTallerChange?.select) {
+    pendingTallerChange.select.value = pendingTallerChange.currentId;
+  }
+  pendingTallerChange = null;
+  rpaTallerModal.classList.remove("is-open");
+  rpaTallerModal.setAttribute("aria-hidden", "true");
+};
+
+if (rpaTallerModal) {
+  rpaTallerModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-taller-close]")) {
+      closeRpaTallerModal(true);
+    }
+  });
+}
+
+if (rpaTallerConfirm) {
+  rpaTallerConfirm.addEventListener("click", async () => {
+    if (!pendingTallerChange) {
+      closeRpaTallerModal(false);
+      return;
+    }
+    const { select, procesoId, nextId, nextName, currentId } = pendingTallerChange;
+    try {
+      const response = await fetch(`/tools/rpa-enargas/${procesoId}/taller`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Requested-With": "fetch",
+          Accept: "application/json",
+          "X-CSRFToken": rpaTallerCsrf?.value || "",
+        },
+        body: JSON.stringify({ taller_id: nextId }),
+      });
+      const payload = await safeJson(response);
+      if (!response.ok) {
+        throw new Error(payload.error || "No se pudo actualizar el taller.");
+      }
+      select.dataset.currentId = payload.taller_id ? String(payload.taller_id) : "";
+      select.dataset.currentName = payload.taller_nombre || "Sin taller";
+      showToast("Taller actualizado.", "success", 3200);
+    } catch (error) {
+      select.value = currentId;
+      showToast(error.message || "No se pudo actualizar el taller.");
+    } finally {
+      closeRpaTallerModal(false);
+    }
   });
 }
 
