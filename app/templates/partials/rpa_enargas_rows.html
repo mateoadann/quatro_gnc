@@ -8,6 +8,14 @@
   "Credenciales inválidas": ("Credenciales inválidas", "result-credenciales")
 } %}
 <tr data-proceso-id="{{ proceso.id }}">
+  <td class="select-col">
+    <input
+      type="checkbox"
+      class="rpa-select"
+      value="{{ proceso.id }}"
+      aria-label="Seleccionar proceso {{ proceso.patente }}"
+    />
+  </td>
   <td>{{ proceso.created_at.strftime("%d/%m/%y") if proceso.created_at else "-" }}</td>
   <td>{{ proceso.patente }}</td>
   <td>{{ proceso.taller.nombre if proceso.taller else "-" }}</td>
@@ -110,6 +118,6 @@
 </tr>
 {% else %}
 <tr>
-  <td colspan="7" class="muted">Sin consultas aun.</td>
+  <td colspan="8" class="muted">Sin consultas aun.</td>
 </tr>
 {% endfor %}

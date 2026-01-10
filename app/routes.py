@@ -356,7 +356,8 @@ def rpa_enargas():
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.outerjoin(Taller)
+        Proceso.query.filter(Proceso.user_id == current_user.id)
+        .outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
     query = _apply_filters(query, filters)
@@ -364,7 +365,7 @@ def rpa_enargas():
     procesos, page, total_pages, _total = _paginate_query(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.estado == "en proceso")
+        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
         .first()
         is not None
     )
@@ -404,7 +405,8 @@ def rpa_enargas_table():
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.outerjoin(Taller)
+        Proceso.query.filter(Proceso.user_id == current_user.id)
+        .outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
     query = _apply_filters(query, filters)
@@ -412,7 +414,7 @@ def rpa_enargas_table():
     procesos, page, total_pages, total = _paginate_query_no_count(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.estado == "en proceso")
+        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
         .first()
         is not None
     )
@@ -475,6 +477,39 @@ def rpa_enargas_retry(proceso_id):
         )
     flash("Proceso reencolado.", "success")
     return redirect(url_for("main.rpa_enargas"))
+
+
+@main.route("/tools/rpa-enargas/delete", methods=["POST"])
+@login_required
+def rpa_enargas_delete():
+    payload = request.get_json(silent=True) or {}
+    raw_ids = payload.get("ids", [])
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return jsonify({"error": "Selecciona al menos un proceso."}), 400
+
+    ids = []
+    for value in raw_ids:
+        try:
+            ids.append(int(value))
+        except (TypeError, ValueError):
+            continue
+
+    if not ids:
+        return jsonify({"error": "Selecciona al menos un proceso."}), 400
+
+    procesos = (
+        Proceso.query.filter(Proceso.user_id == current_user.id)
+        .filter(Proceso.id.in_(ids))
+        .all()
+    )
+    if not procesos:
+        return jsonify({"error": "No se encontraron procesos para eliminar."}), 404
+
+    for proceso in procesos:
+        db.session.delete(proceso)
+
+    db.session.commit()
+    return jsonify({"deleted": len(procesos)})
 
 
 def _get_stale_ids(procesos, minutes=10):
