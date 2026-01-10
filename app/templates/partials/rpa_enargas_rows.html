@@ -8,9 +8,32 @@
   "Credenciales inválidas": ("Credenciales inválidas", "result-credenciales")
 } %}
 <tr data-proceso-id="{{ proceso.id }}">
+  <td class="select-col">
+    <input
+      type="checkbox"
+      class="rpa-select"
+      value="{{ proceso.id }}"
+      aria-label="Seleccionar proceso {{ proceso.patente }}"
+    />
+  </td>
   <td>{{ proceso.created_at.strftime("%d/%m/%y") if proceso.created_at else "-" }}</td>
   <td>{{ proceso.patente }}</td>
-  <td>{{ proceso.taller.nombre if proceso.taller else "-" }}</td>
+  <td>
+    <select
+      class="rpa-taller-select"
+      data-proceso-id="{{ proceso.id }}"
+      data-current-id="{{ proceso.taller.id if proceso.taller else '' }}"
+      data-current-name="{{ proceso.taller.nombre if proceso.taller else 'Sin taller' }}"
+      {% if proceso.estado == 'en proceso' %}disabled{% endif %}
+    >
+      <option value="" {% if not proceso.taller %}selected{% endif %}>Sin taller</option>
+      {% for taller in talleres %}
+      <option value="{{ taller.id }}" {% if proceso.taller and proceso.taller.id == taller.id %}selected{% endif %}>
+        {{ taller.nombre }}
+      </option>
+      {% endfor %}
+    </select>
+  </td>
   <td>
     <span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span>
   </td>
@@ -110,6 +133,6 @@
 </tr>
 {% else %}
 <tr>
-  <td colspan="7" class="muted">Sin consultas aun.</td>
+  <td colspan="8" class="muted">Sin consultas aun.</td>
 </tr>
 {% endfor %}
