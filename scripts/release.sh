@@ -6,7 +6,12 @@ if ! command -v git >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v python >/dev/null 2>&1; then
+PYTHON_BIN=""
+if command -v python >/dev/null 2>&1; then
+  PYTHON_BIN="python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON_BIN="python3"
+else
   echo "python no esta instalado." >&2
   exit 1
 fi
@@ -36,7 +41,7 @@ fi
 
 DATE="$(date +%Y-%m-%d)"
 
-python - "$VERSION" "$DATE" <<'PY'
+"$PYTHON_BIN" - "$VERSION" "$DATE" <<'PY'
 import re
 import sys
 from pathlib import Path
