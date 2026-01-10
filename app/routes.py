@@ -70,16 +70,10 @@ def _wants_json() -> bool:
 
 
 def _render_proceso_row(proceso):
-    talleres = (
-        Taller.query.filter_by(user_id=proceso.user_id)
-        .order_by(Taller.nombre.asc())
-        .all()
-    )
     return render_template(
         "partials/rpa_enargas_rows.html",
         procesos=[proceso],
         stale_ids=set(),
-        talleres=talleres,
     )
 
 
@@ -362,8 +356,7 @@ def rpa_enargas():
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
-        .outerjoin(Taller)
+        Proceso.query.outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
     query = _apply_filters(query, filters)
@@ -371,11 +364,16 @@ def rpa_enargas():
     procesos, page, total_pages, _total = _paginate_query(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
+        .filter(Proceso.estado == "en proceso")
         .first()
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
+    talleres = (
+        Taller.query.filter_by(user_id=current_user.id)
+        .order_by(Taller.nombre.asc())
+        .all()
+    )
     talleres = (
         Taller.query.filter_by(user_id=current_user.id)
         .order_by(Taller.nombre.asc())
@@ -406,8 +404,7 @@ def rpa_enargas_table():
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
-        .outerjoin(Taller)
+        Proceso.query.outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
     query = _apply_filters(query, filters)
@@ -415,21 +412,15 @@ def rpa_enargas_table():
     procesos, page, total_pages, total = _paginate_query_no_count(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
+        .filter(Proceso.estado == "en proceso")
         .first()
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
-    talleres = (
-        Taller.query.filter_by(user_id=current_user.id)
-        .order_by(Taller.nombre.asc())
-        .all()
-    )
     html = render_template(
         "partials/rpa_enargas_rows.html",
         procesos=procesos,
         stale_ids=stale_ids,
-        talleres=talleres,
     )
     pagination = render_template(
         "partials/rpa_pagination.html",
@@ -484,69 +475,6 @@ def rpa_enargas_retry(proceso_id):
         )
     flash("Proceso reencolado.", "success")
     return redirect(url_for("main.rpa_enargas"))
-
-
-@main.route("/tools/rpa-enargas/<int:proceso_id>/taller", methods=["POST"])
-@login_required
-def rpa_enargas_update_taller(proceso_id):
-    payload = request.get_json(silent=True) or {}
-    raw_taller_id = payload.get("taller_id")
-    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
-    if not proceso:
-        return jsonify({"error": "Proceso no encontrado."}), 404
-
-    if proceso.estado == "en proceso":
-        return jsonify({"error": "No se puede editar un proceso en curso."}), 400
-
-    if raw_taller_id in (None, "", 0, "0"):
-        proceso.taller_id = None
-        db.session.commit()
-        return jsonify({"taller_id": None, "taller_nombre": "Sin taller"})
-
-    try:
-        taller_id = int(raw_taller_id)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Taller invalido."}), 400
-
-    taller = Taller.query.filter_by(id=taller_id, user_id=current_user.id).first()
-    if not taller:
-        return jsonify({"error": "Taller no encontrado."}), 404
-
-    proceso.taller_id = taller.id
-    db.session.commit()
-    return jsonify({"taller_id": taller.id, "taller_nombre": taller.nombre})
-
-@main.route("/tools/rpa-enargas/delete", methods=["POST"])
-@login_required
-def rpa_enargas_delete():
-    payload = request.get_json(silent=True) or {}
-    raw_ids = payload.get("ids", [])
-    if not isinstance(raw_ids, list) or not raw_ids:
-        return jsonify({"error": "Selecciona al menos un proceso."}), 400
-
-    ids = []
-    for value in raw_ids:
-        try:
-            ids.append(int(value))
-        except (TypeError, ValueError):
-            continue
-
-    if not ids:
-        return jsonify({"error": "Selecciona al menos un proceso."}), 400
-
-    procesos = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
-        .filter(Proceso.id.in_(ids))
-        .all()
-    )
-    if not procesos:
-        return jsonify({"error": "No se encontraron procesos para eliminar."}), 404
-
-    for proceso in procesos:
-        db.session.delete(proceso)
-
-    db.session.commit()
-    return jsonify({"deleted": len(procesos)})
 
 
 def _get_stale_ids(procesos, minutes=10):

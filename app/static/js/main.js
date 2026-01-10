@@ -119,18 +119,6 @@ const refreshBody = document.querySelector("#rpa-table-body");
 const refreshPagination = document.querySelector("#rpa-pagination");
 const refreshPaginationTop = document.querySelector("#rpa-pagination-top");
 const totalCountEl = document.querySelector("#rpa-total-count");
-const totalCountLabelEl = document.querySelector("#rpa-count-label");
-const rpaDeleteBtn = document.querySelector("#rpa-delete-btn");
-const rpaDeleteCsrf = document.querySelector("#rpa-delete-csrf");
-const rpaDeleteModal = document.querySelector("#rpa-delete-modal");
-const rpaDeleteConfirm = document.querySelector("#rpa-delete-confirm");
-const rpaSelectAll = document.querySelector("#rpa-select-all");
-const rpaTallerCsrf = document.querySelector("#rpa-taller-csrf");
-const rpaTallerModal = document.querySelector("#rpa-taller-modal");
-const rpaTallerConfirm = document.querySelector("#rpa-taller-confirm");
-const rpaTallerMessage = document.querySelector("#rpa-taller-message");
-const selectedRpaIds = new Set();
-let pendingTallerChange = null;
 let refreshTimerId = null;
 
 const refreshTable = async () => {
@@ -162,13 +150,8 @@ const refreshTable = async () => {
       }
     }
     if (totalCountEl && payload.total !== undefined) {
-      totalCountEl.dataset.total = payload.total;
-      if (selectedRpaIds.size === 0) {
-        totalCountEl.textContent = payload.total;
-      }
+      totalCountEl.textContent = payload.total;
     }
-    applySelectionToTable();
-    updateRpaSelectionUI();
     updatePaginationState(payload);
     if (payload.has_pending) {
       refreshTimerId = setTimeout(refreshTable, interval);
@@ -214,9 +197,6 @@ const createOptimisticRow = (patente, tallerName, placeholderId) => {
   row.dataset.placeholderId = placeholderId;
   row.classList.add("pending-row");
   row.innerHTML = `
-    <td class="select-col">
-      <input type="checkbox" class="rpa-select" disabled aria-label="Seleccionar proceso" />
-    </td>
     <td>${formattedDate}</td>
     <td>${escapeHtml(patente)}</td>
     <td>${escapeHtml(tallerName || "-")}</td>
@@ -238,84 +218,6 @@ const createOptimisticRow = (patente, tallerName, placeholderId) => {
   `;
   return row;
 };
-
-const applySelectionToTable = () => {
-  if (!refreshBody) {
-    return;
-  }
-  const idsInTable = new Set();
-  refreshBody.querySelectorAll(".rpa-select").forEach((checkbox) => {
-    const id = Number.parseInt(checkbox.value, 10);
-    if (Number.isNaN(id)) {
-      return;
-    }
-    idsInTable.add(id);
-    checkbox.checked = selectedRpaIds.has(id);
-  });
-  Array.from(selectedRpaIds).forEach((id) => {
-    if (!idsInTable.has(id)) {
-      selectedRpaIds.delete(id);
-    }
-  });
-  updateSelectAllState();
-};
-
-const updateSelectAllState = () => {
-  if (!rpaSelectAll || !refreshBody) {
-    return;
-  }
-  const checkboxes = Array.from(
-    refreshBody.querySelectorAll(".rpa-select")
-  ).filter((checkbox) => !checkbox.disabled);
-  const total = checkboxes.length;
-  if (total === 0) {
-    rpaSelectAll.checked = false;
-    rpaSelectAll.indeterminate = false;
-    rpaSelectAll.disabled = true;
-    return;
-  }
-  rpaSelectAll.disabled = false;
-  const selected = checkboxes.filter((checkbox) => checkbox.checked).length;
-  if (selected === 0) {
-    rpaSelectAll.checked = false;
-    rpaSelectAll.indeterminate = false;
-  } else if (selected === total) {
-    rpaSelectAll.checked = true;
-    rpaSelectAll.indeterminate = false;
-  } else {
-    rpaSelectAll.checked = false;
-    rpaSelectAll.indeterminate = true;
-  }
-};
-
-const updateRpaSelectionUI = () => {
-  if (!totalCountEl) {
-    return;
-  }
-  const selectedCount = selectedRpaIds.size;
-  if (selectedCount > 0) {
-    if (totalCountLabelEl) {
-      totalCountLabelEl.textContent = "Seleccionados";
-    }
-    totalCountEl.textContent = selectedCount;
-  } else {
-    if (totalCountLabelEl) {
-      totalCountLabelEl.textContent = "Total";
-    }
-    const total = totalCountEl.dataset.total;
-    if (total !== undefined) {
-      totalCountEl.textContent = total;
-    }
-  }
-  if (rpaDeleteBtn) {
-    const shouldShow = selectedCount > 0;
-    rpaDeleteBtn.hidden = !shouldShow;
-    rpaDeleteBtn.disabled = !shouldShow;
-  }
-  updateSelectAllState();
-};
-
-updateRpaSelectionUI();
 
 const rpaForm = document.querySelector("#rpa-form");
 const loginForm = document.querySelector("[data-login-form]");
@@ -515,79 +417,6 @@ if (loginForm) {
 }
 
 if (refreshBody) {
-  if (rpaSelectAll) {
-    rpaSelectAll.addEventListener("change", () => {
-      const checkboxes = refreshBody.querySelectorAll(".rpa-select");
-      selectedRpaIds.clear();
-      checkboxes.forEach((checkbox) => {
-        if (checkbox.disabled) {
-          return;
-        }
-        checkbox.checked = rpaSelectAll.checked;
-        const id = Number.parseInt(checkbox.value, 10);
-        if (!Number.isNaN(id) && rpaSelectAll.checked) {
-          selectedRpaIds.add(id);
-        }
-      });
-      updateRpaSelectionUI();
-    });
-  }
-
-  refreshBody.addEventListener("change", (event) => {
-    const checkbox = event.target.closest(".rpa-select");
-    if (!checkbox) {
-      return;
-    }
-    const id = Number.parseInt(checkbox.value, 10);
-    if (Number.isNaN(id)) {
-      return;
-    }
-    if (checkbox.checked) {
-      selectedRpaIds.add(id);
-    } else {
-      selectedRpaIds.delete(id);
-    }
-    updateRpaSelectionUI();
-  });
-
-  refreshBody.addEventListener("change", (event) => {
-    const select = event.target.closest(".rpa-taller-select");
-    if (!select) {
-      return;
-    }
-    const procesoId = select.dataset.procesoId;
-    const currentName = select.dataset.currentName || "Sin taller";
-    const currentId = select.dataset.currentId || "";
-    const nextId = select.value;
-    const nextName =
-      select.selectedOptions[0]?.textContent?.trim() || "Sin taller";
-
-    if (!procesoId) {
-      return;
-    }
-
-    if (nextId === currentId) {
-      return;
-    }
-
-    if (!rpaTallerModal || !rpaTallerMessage) {
-      select.value = currentId;
-      return;
-    }
-
-    pendingTallerChange = {
-      select,
-      procesoId,
-      nextId,
-      nextName,
-      currentId,
-      currentName,
-    };
-    rpaTallerMessage.textContent = `Cambiar "${currentName}" por "${nextName}"?`;
-    rpaTallerModal.classList.add("is-open");
-    rpaTallerModal.setAttribute("aria-hidden", "false");
-  });
-
   refreshBody.addEventListener("submit", async (event) => {
     const form = event.target.closest("form");
     if (!form || !form.action.includes("/retry")) {
@@ -598,15 +427,15 @@ if (refreshBody) {
     const row = form.closest("tr");
     if (row) {
       row.classList.add("pending-row");
-      const statusCell = row.querySelector("td:nth-child(5)");
+      const statusCell = row.querySelector("td:nth-child(4)");
       if (statusCell) {
         statusCell.innerHTML = '<span class="badge en-proceso">en proceso</span>';
       }
-      const resultCell = row.querySelector("td:nth-child(6)");
+      const resultCell = row.querySelector("td:nth-child(5)");
       if (resultCell) {
         resultCell.textContent = "-";
       }
-      const detailCell = row.querySelector("td:nth-child(7)");
+      const detailCell = row.querySelector("td:nth-child(6)");
       if (detailCell) {
         detailCell.textContent = "-";
       }
@@ -639,123 +468,6 @@ if (refreshBody) {
         row.classList.remove("pending-row");
       }
       showToast(error.message);
-    }
-  });
-}
-
-const deleteSelectedProcesos = async () => {
-  if (!selectedRpaIds.size) {
-    return;
-  }
-  const ids = Array.from(selectedRpaIds);
-  try {
-    const response = await fetch("/tools/rpa-enargas/delete", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Requested-With": "fetch",
-        Accept: "application/json",
-        "X-CSRFToken": rpaDeleteCsrf?.value || "",
-      },
-      body: JSON.stringify({ ids }),
-    });
-    const payload = await safeJson(response);
-    if (!response.ok) {
-      throw new Error(payload.error || "No se pudieron eliminar los procesos.");
-    }
-    selectedRpaIds.clear();
-    updateRpaSelectionUI();
-    refreshTable();
-    showToast(`Eliminados: ${payload.deleted}`, "success", 4200);
-  } catch (error) {
-    showToast(error.message || "No se pudieron eliminar los procesos.");
-  }
-};
-
-if (rpaDeleteBtn) {
-  rpaDeleteBtn.addEventListener("click", () => {
-    if (!rpaDeleteModal) {
-      deleteSelectedProcesos();
-      return;
-    }
-    rpaDeleteModal.classList.add("is-open");
-    rpaDeleteModal.setAttribute("aria-hidden", "false");
-  });
-}
-
-const closeRpaDeleteModal = () => {
-  if (!rpaDeleteModal) {
-    return;
-  }
-  rpaDeleteModal.classList.remove("is-open");
-  rpaDeleteModal.setAttribute("aria-hidden", "true");
-};
-
-if (rpaDeleteModal) {
-  rpaDeleteModal.addEventListener("click", (event) => {
-    if (event.target.closest("[data-delete-close]")) {
-      closeRpaDeleteModal();
-    }
-  });
-}
-
-if (rpaDeleteConfirm) {
-  rpaDeleteConfirm.addEventListener("click", async () => {
-    await deleteSelectedProcesos();
-    closeRpaDeleteModal();
-  });
-}
-
-const closeRpaTallerModal = (revert = true) => {
-  if (!rpaTallerModal) {
-    return;
-  }
-  if (revert && pendingTallerChange?.select) {
-    pendingTallerChange.select.value = pendingTallerChange.currentId;
-  }
-  pendingTallerChange = null;
-  rpaTallerModal.classList.remove("is-open");
-  rpaTallerModal.setAttribute("aria-hidden", "true");
-};
-
-if (rpaTallerModal) {
-  rpaTallerModal.addEventListener("click", (event) => {
-    if (event.target.closest("[data-taller-close]")) {
-      closeRpaTallerModal(true);
-    }
-  });
-}
-
-if (rpaTallerConfirm) {
-  rpaTallerConfirm.addEventListener("click", async () => {
-    if (!pendingTallerChange) {
-      closeRpaTallerModal(false);
-      return;
-    }
-    const { select, procesoId, nextId, nextName, currentId } = pendingTallerChange;
-    try {
-      const response = await fetch(`/tools/rpa-enargas/${procesoId}/taller`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Requested-With": "fetch",
-          Accept: "application/json",
-          "X-CSRFToken": rpaTallerCsrf?.value || "",
-        },
-        body: JSON.stringify({ taller_id: nextId }),
-      });
-      const payload = await safeJson(response);
-      if (!response.ok) {
-        throw new Error(payload.error || "No se pudo actualizar el taller.");
-      }
-      select.dataset.currentId = payload.taller_id ? String(payload.taller_id) : "";
-      select.dataset.currentName = payload.taller_nombre || "Sin taller";
-      showToast("Taller actualizado.", "success", 3200);
-    } catch (error) {
-      select.value = currentId;
-      showToast(error.message || "No se pudo actualizar el taller.");
-    } finally {
-      closeRpaTallerModal(false);
     }
   });
 }

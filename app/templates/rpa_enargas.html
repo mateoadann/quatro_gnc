@@ -235,25 +235,12 @@
         </div>
       </form>
       <div class="table-meta">
-        <button class="ghost-btn danger-btn" type="button" id="rpa-delete-btn" hidden>
-          Eliminar
-        </button>
-        <span class="muted"><span id="rpa-count-label">Total</span>: <strong id="rpa-total-count" data-total="{{ total_count }}">{{ total_count }}</strong></span>
-        <input type="hidden" id="rpa-delete-csrf" value="{{ csrf_token() }}" />
-        <input type="hidden" id="rpa-taller-csrf" value="{{ csrf_token() }}" />
+        <span class="muted">Total: <strong id="rpa-total-count">{{ total_count }}</strong></span>
       </div>
     </div>
     <table>
       <thead>
         <tr>
-          <th class="select-col">
-            <input
-              type="checkbox"
-              id="rpa-select-all"
-              class="rpa-select-all"
-              aria-label="Seleccionar todos en esta pagina"
-            />
-          </th>
           <th class="sortable" data-sort="fecha">Fecha</th>
           <th class="sortable" data-sort="patente">Patente</th>
           <th>Taller</th>
@@ -281,30 +268,6 @@
     <pre class="error-detail" id="rpa-error-detail"></pre>
     <div class="modal-actions">
       <button class="ghost-btn" type="button" data-error-close>Cerrar</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal" id="rpa-delete-modal" aria-hidden="true">
-  <div class="modal-overlay" data-delete-close></div>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rpa-delete-title">
-    <h3 id="rpa-delete-title">Confirmar eliminacion</h3>
-    <p class="muted">Esta accion eliminara los procesos seleccionados.</p>
-    <div class="modal-actions modal-actions--danger">
-      <button class="ghost-btn danger-btn" type="button" id="rpa-delete-confirm">Eliminar</button>
-      <button class="ghost-btn neutral-btn" type="button" data-delete-close>Cancelar</button>
-    </div>
-  </div>
-</div>
-
-<div class="modal" id="rpa-taller-modal" aria-hidden="true">
-  <div class="modal-overlay" data-taller-close></div>
-  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="rpa-taller-title">
-    <h3 id="rpa-taller-title">Confirmar cambio de taller</h3>
-    <p class="muted" id="rpa-taller-message"></p>
-    <div class="modal-actions modal-actions--danger">
-      <button class="ghost-btn success-btn" type="button" id="rpa-taller-confirm">Guardar</button>
-      <button class="ghost-btn neutral-btn" type="button" data-taller-close>Cancelar</button>
     </div>
   </div>
 </div>
