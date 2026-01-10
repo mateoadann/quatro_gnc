@@ -55,12 +55,12 @@ if f"## [{version}]" in text:
     print("La version ya existe en CHANGELOG.")
     sys.exit(1)
 
-pattern = r"## \\[Unreleased\\]\\r?\\n"
+pattern = r"## \[Unreleased\]\r?\n"
 if not re.search(pattern, text):
     print("No se encontro la seccion [Unreleased] en CHANGELOG.")
     sys.exit(1)
 
-replacement = f"## [Unreleased]\\n\\n## [{version}] - {date}\\n"
+replacement = f"## [Unreleased]\n\n## [{version}] - {date}\n"
 text = re.sub(pattern, replacement, text, count=1)
 path.write_text(text)
 print("CHANGELOG actualizado.")
