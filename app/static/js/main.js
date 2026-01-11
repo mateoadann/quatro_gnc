@@ -1,5 +1,17 @@
 const flashMessages = document.querySelectorAll(".flash");
 flashMessages.forEach((message) => {
+  const closeBtn = message.querySelector(".flash__close");
+  if (closeBtn) {
+    closeBtn.addEventListener("click", () => {
+      message.classList.add("dismissed");
+      setTimeout(() => {
+        message.remove();
+      }, 250);
+    });
+  }
+  if (message.classList.contains("persistent")) {
+    return;
+  }
   const delay = message.classList.contains("error") ? 12000 : 3500;
   setTimeout(() => {
     message.classList.add("dismissed");
@@ -108,7 +120,7 @@ toggleButtons.forEach((button) => {
     button.classList.toggle("is-active", isPassword);
     button.setAttribute(
       "aria-label",
-      isPassword ? "Ocultar contrasena" : "Mostrar contrasena"
+      isPassword ? "Ocultar contraseña" : "Mostrar contraseña"
     );
     button.setAttribute("aria-pressed", isPassword ? "true" : "false");
   });
@@ -129,6 +141,17 @@ const rpaTallerCsrf = document.querySelector("#rpa-taller-csrf");
 const rpaTallerModal = document.querySelector("#rpa-taller-modal");
 const rpaTallerConfirm = document.querySelector("#rpa-taller-confirm");
 const rpaTallerMessage = document.querySelector("#rpa-taller-message");
+const userCreateModal = document.querySelector("#user-create-modal");
+const userCreateBtn = document.querySelector("#user-create-btn");
+const userCreatePassword = document.querySelector("#user-create-password");
+const userGeneratePassword = document.querySelector("#user-generate-password");
+const userSaveModal = document.querySelector("#user-save-modal");
+const userSaveConfirm = document.querySelector("#user-save-confirm");
+const userActiveModal = document.querySelector("#user-active-modal");
+const userActiveConfirm = document.querySelector("#user-active-confirm");
+let pendingUserForm = null;
+let pendingActiveToggle = null;
+const metricsCard = document.querySelector("#metrics-card");
 const selectedRpaIds = new Set();
 let pendingTallerChange = null;
 let refreshTimerId = null;
@@ -404,6 +427,80 @@ const confirmNewTaller = () => {
   closeTallerModal();
 };
 
+const openUserCreateModal = () => {
+  if (!userCreateModal) {
+    return;
+  }
+  userCreateModal.classList.add("is-open");
+  userCreateModal.setAttribute("aria-hidden", "false");
+  const firstInput = userCreateModal.querySelector("input[name='username']");
+  if (firstInput) {
+    firstInput.focus();
+  }
+};
+
+const closeUserCreateModal = () => {
+  if (!userCreateModal) {
+    return;
+  }
+  userCreateModal.classList.remove("is-open");
+  userCreateModal.setAttribute("aria-hidden", "true");
+};
+
+const openUserSaveModal = () => {
+  if (!userSaveModal) {
+    return;
+  }
+  userSaveModal.classList.add("is-open");
+  userSaveModal.setAttribute("aria-hidden", "false");
+};
+
+const closeUserSaveModal = () => {
+  if (!userSaveModal) {
+    return;
+  }
+  userSaveModal.classList.remove("is-open");
+  userSaveModal.setAttribute("aria-hidden", "true");
+  pendingUserForm = null;
+};
+
+const openUserActiveModal = () => {
+  if (!userActiveModal) {
+    return;
+  }
+  userActiveModal.classList.add("is-open");
+  userActiveModal.setAttribute("aria-hidden", "false");
+};
+
+const closeUserActiveModal = (clearPending = true) => {
+  if (!userActiveModal) {
+    return;
+  }
+  userActiveModal.classList.remove("is-open");
+  userActiveModal.setAttribute("aria-hidden", "true");
+  if (clearPending) {
+    pendingActiveToggle = null;
+  }
+};
+
+const generatePassword = () => {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const length = 12;
+  let value = "";
+  const bytes = new Uint8Array(length);
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+    bytes.forEach((byte) => {
+      value += alphabet[byte % alphabet.length];
+    });
+  } else {
+    for (let i = 0; i < length; i += 1) {
+      value += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+  }
+  return value;
+};
+
 if (tallerCreateBtn) {
   tallerCreateBtn.addEventListener("click", openTallerModal);
 }
@@ -415,6 +512,157 @@ if (tallerModal) {
     if (event.target.closest("[data-modal-close]")) {
       closeTallerModal();
     }
+  });
+}
+
+if (userCreateBtn) {
+  userCreateBtn.addEventListener("click", openUserCreateModal);
+}
+if (userCreateModal) {
+  userCreateModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-modal-close]")) {
+      closeUserCreateModal();
+    }
+  });
+}
+if (userSaveModal) {
+  userSaveModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-modal-close]")) {
+      closeUserSaveModal();
+    }
+  });
+}
+if (userActiveModal) {
+  userActiveModal.addEventListener("click", (event) => {
+    if (event.target.closest("[data-modal-close]")) {
+      if (pendingActiveToggle) {
+        pendingActiveToggle.checked = !pendingActiveToggle.checked;
+      }
+      closeUserActiveModal();
+    }
+  });
+}
+if (userGeneratePassword && userCreatePassword) {
+  userGeneratePassword.addEventListener("click", () => {
+    const password = generatePassword();
+    userCreatePassword.value = password;
+    userCreatePassword.focus();
+  });
+}
+const userGenerateButtons = document.querySelectorAll("[data-generate-password]");
+userGenerateButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const targetId = button.getAttribute("data-target");
+    const target = targetId ? document.getElementById(targetId) : null;
+    if (!target) {
+      return;
+    }
+    const password = generatePassword();
+    target.value = password;
+    target.focus();
+  });
+});
+const userSaveButtons = document.querySelectorAll("[data-user-save]");
+userSaveButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    const formId = button.getAttribute("data-form-id");
+    const form = formId ? document.getElementById(formId) : null;
+    if (!form) {
+      return;
+    }
+    pendingUserForm = form;
+    openUserSaveModal();
+  });
+});
+if (userSaveConfirm) {
+  userSaveConfirm.addEventListener("click", () => {
+    if (!pendingUserForm) {
+      closeUserSaveModal();
+      return;
+    }
+    if (pendingUserForm.requestSubmit) {
+      pendingUserForm.requestSubmit();
+    } else {
+      pendingUserForm.submit();
+    }
+    closeUserSaveModal();
+  });
+}
+
+const fetchMetricsCard = async (form, params) => {
+  if (!metricsCard || !form) {
+    return;
+  }
+  const targetUrl = form.dataset.metricsUrl || form.action || window.location.href;
+  const url = new URL(targetUrl, window.location.origin);
+  if (params) {
+    url.search = params;
+  }
+  try {
+    const response = await fetch(url.toString(), {
+      headers: { "X-Requested-With": "fetch", Accept: "text/html" },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      throw new Error("No se pudo actualizar las métricas.");
+    }
+    const html = await response.text();
+    metricsCard.innerHTML = html;
+  } catch (error) {
+    showToast(error.message, "error", 4200);
+  }
+};
+
+document.addEventListener("submit", (event) => {
+  const form = event.target;
+  if (!form || form.id !== "metrics-form") {
+    return;
+  }
+  event.preventDefault();
+  const data = new FormData(form);
+  const params = new URLSearchParams(data).toString();
+  fetchMetricsCard(form, params);
+});
+
+document.addEventListener("click", (event) => {
+  const clearBtn = event.target.closest("#metrics-clear");
+  if (!clearBtn) {
+    return;
+  }
+  event.preventDefault();
+  const form = document.querySelector("#metrics-form");
+  if (form) {
+    form.reset();
+    fetchMetricsCard(form, "");
+  }
+});
+
+const userActiveToggles = document.querySelectorAll("[data-active-toggle]");
+userActiveToggles.forEach((toggle) => {
+  toggle.addEventListener("change", () => {
+    if (pendingActiveToggle === toggle) {
+      return;
+    }
+    pendingActiveToggle = toggle;
+    openUserActiveModal();
+  });
+});
+if (userActiveConfirm) {
+  userActiveConfirm.addEventListener("click", () => {
+    if (!pendingActiveToggle) {
+      closeUserActiveModal();
+      return;
+    }
+    const formId = pendingActiveToggle.getAttribute("data-form-id");
+    const form = formId ? document.getElementById(formId) : null;
+    if (form) {
+      if (form.requestSubmit) {
+        form.requestSubmit();
+      } else {
+        form.submit();
+      }
+    }
+    closeUserActiveModal();
   });
 }
 

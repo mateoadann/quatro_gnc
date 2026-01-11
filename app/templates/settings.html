@@ -10,9 +10,28 @@
 
 <section class="grid single">
   <div class="card">
+    <h2>Workspace</h2>
+    <form class="form-grid" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="form_type" value="workspace" />
+      <label>
+        Nombre del workspace
+        <input
+          type="text"
+          name="workspace_name"
+          value="{{ workspace_name or '' }}"
+          required
+        />
+      </label>
+      <button class="primary-btn" type="submit">Guardar cambios</button>
+      <p class="muted">Este nombre se muestra en el titulo y la marca.</p>
+    </form>
+  </div>
+  <div class="card">
     <h2>Credenciales Enargas</h2>
     <form class="form-grid" method="post">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="form_type" value="credentials" />
       <label>
         Usuario Enargas
         <input
@@ -23,7 +42,7 @@
         />
       </label>
       <label>
-        Contrasena Enargas
+        Contraseña Enargas
         <div class="input-with-toggle">
           <input
             type="password"
@@ -37,7 +56,7 @@
             type="button"
             data-toggle-password
             data-target="enargas-password"
-            aria-label="Mostrar contrasena"
+            aria-label="Mostrar contraseña"
             aria-pressed="false"
           >
             <span class="icon-eye" aria-hidden="true">
@@ -60,7 +79,7 @@
         </div>
       </label>
       <button class="primary-btn" type="submit">Guardar cambios</button>
-      <p class="muted">La contrasena se cifra antes de almacenarse.</p>
+      <p class="muted">La contraseña se cifra antes de almacenarse.</p>
     </form>
   </div>
 </section>
