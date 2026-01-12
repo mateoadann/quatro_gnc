@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>QuatroGNC Dashboard</title>
+    <title>{{ workspace_name }} Dashboard</title>
     <link rel="icon" type="image/png" href="{{ url_for('static', filename='tanque-gas.png') }}" />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   </head>
@@ -12,7 +12,7 @@
     <div class="page">
       {% if current_user.is_authenticated %}
       <header class="topbar">
-        <a class="brand" href="{{ url_for('main.dashboard') }}">QuatroGNC</a>
+        <a class="brand" href="{{ url_for('main.dashboard') }}">{{ workspace_name }}</a>
         <nav class="nav-links">
           <a href="{{ url_for('main.img_to_pdf') }}" class="{% if request.endpoint == 'main.img_to_pdf' %}active{% endif %}">
             IMG_to_PDF
@@ -20,6 +20,11 @@
           <a href="{{ url_for('main.rpa_enargas') }}" class="{% if request.endpoint == 'main.rpa_enargas' %}active{% endif %}">
             RPA_Enargas
           </a>
+          {% if current_user.role == 'admin' %}
+          <a href="{{ url_for('main.control_panel') }}" class="{% if request.endpoint == 'main.control_panel' %}active{% endif %}">
+            Panel de control
+          </a>
+          {% endif %}
         </nav>
         <div class="user-area">
           <span class="user-label">
@@ -35,7 +40,7 @@
       </header>
       {% else %}
       <header class="topbar auth">
-        <span class="brand">QuatroGNC</span>
+        <span class="brand">{{ workspace_name }}</span>
       </header>
       {% endif %}
 
@@ -44,7 +49,10 @@
           {% if messages %}
             <div class="flash-stack">
               {% for category, message in messages %}
-                <div class="flash {{ category }}">{{ message }}</div>
+                <div class="flash {{ category }}">
+                  <span class="flash__text">{{ message }}</span>
+                  <button class="flash__close" type="button" aria-label="Cerrar">×</button>
+                </div>
               {% endfor %}
             </div>
           {% endif %}

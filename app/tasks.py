@@ -3,6 +3,8 @@ from .extensions import db
 from .models import EnargasCredentials, ImgToPdfJob, Proceso
 from .queue import get_queue
 import traceback
+from pathlib import Path
+import shutil
 
 from .services.rpa_enargas import NoOperacionesError, SessionActivaError, run_rpa
 from .services.process_pdf_enargas import analyze_pdf_bytes
@@ -120,11 +122,35 @@ def process_img_to_pdf_job(job_id: int, image_paths: list[str]) -> None:
             job.pdf_filename = job.filename
             job.status = "done"
             job.error_message = None
+            _cleanup_img_pdf_files(image_paths)
         except Exception as exc:
             job.status = "error"
             job.error_message = _format_img_pdf_error(exc)
+            _cleanup_img_pdf_files(image_paths)
 
         db.session.commit()
+
+
+def _cleanup_img_pdf_files(image_paths: list[str]) -> None:
+    if not image_paths:
+        return
+    base_dir = Path("debug/img_to_pdf").resolve()
+    parents = set()
+    for value in image_paths:
+        try:
+            resolved = Path(value).resolve()
+        except FileNotFoundError:
+            continue
+        if resolved == base_dir or base_dir not in resolved.parents:
+            continue
+        parents.add(resolved.parent)
+    for parent in parents:
+        if parent == base_dir or base_dir not in parent.parents:
+            continue
+        try:
+            shutil.rmtree(parent, ignore_errors=True)
+        except Exception:
+            pass
 
 
 def _format_error() -> str:

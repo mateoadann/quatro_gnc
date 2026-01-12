@@ -8,7 +8,15 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
 from .extensions import csrf, db, login_manager, session_store
-from .models import EnargasCredentials, ImgToPdfJob, Proceso, RpaEnargasJob, User
+from .models import (
+    EnargasCredentials,
+    ImgToPdfJob,
+    Proceso,
+    RpaEnargasJob,
+    Taller,
+    User,
+    Workspace,
+)
 
 
 def create_app():
@@ -40,6 +48,20 @@ def create_app():
             response.headers["Expires"] = "0"
         return response
 
+    @app.context_processor
+    def _inject_workspace():
+        name = app.config.get("APP_BRAND_NAME", "QuatroGNC")
+        try:
+            if current_user.is_authenticated and getattr(current_user, "workspace", None):
+                name = current_user.workspace.name
+            else:
+                workspace = Workspace.query.first()
+                if workspace and workspace.name:
+                    name = workspace.name
+        except Exception:
+            pass
+        return {"workspace_name": name}
+
     @app.cli.command("init-db")
     def init_db():
         with app.app_context():
@@ -52,6 +74,13 @@ def create_app():
             db.create_all()
             _seed_data(app)
         click.echo("Database seeded")
+
+    @app.cli.command("bootstrap-workspace")
+    def bootstrap_workspace():
+        with app.app_context():
+            db.create_all()
+            _bootstrap_workspace(app)
+        click.echo("Workspace actualizado")
 
     return app
 
@@ -97,9 +126,12 @@ def _seed_data(app):
 
     default_user = User.query.filter_by(username=admin_user).first()
     if not default_user:
-        default_user = User(username=admin_user)
+        default_user = User(username=admin_user, role="admin")
         default_user.set_password(admin_password)
         db.session.add(default_user)
+        db.session.commit()
+    elif not default_user.role:
+        default_user.role = "admin"
         db.session.commit()
 
     if not EnargasCredentials.query.filter_by(user_id=default_user.id).first():
@@ -167,5 +199,61 @@ def _seed_data(app):
                 pdf_filename=None,
             )
         )
+
+    db.session.commit()
+
+    _bootstrap_workspace(app)
+
+
+def _bootstrap_workspace(app):
+    name = app.config.get("APP_BRAND_NAME", "QuatroGNC")
+    workspace = Workspace.query.first()
+    if not workspace:
+        workspace = Workspace(name=name)
+        db.session.add(workspace)
+        db.session.commit()
+
+    User.query.filter(User.workspace_id.is_(None)).update(
+        {User.workspace_id: workspace.id},
+        synchronize_session=False,
+    )
+    User.query.filter(User.is_active.is_(None)).update(
+        {User.is_active: True},
+        synchronize_session=False,
+    )
+    User.query.filter(User.role.is_(None)).update(
+        {User.role: "user"},
+        synchronize_session=False,
+    )
+    admin_user = app.config.get("DEFAULT_ADMIN_USER")
+    if admin_user:
+        User.query.filter(User.username == admin_user).update(
+            {User.role: "admin"},
+            synchronize_session=False,
+        )
+    EnargasCredentials.query.filter(EnargasCredentials.workspace_id.is_(None)).update(
+        {EnargasCredentials.workspace_id: workspace.id},
+        synchronize_session=False,
+    )
+    Taller.query.filter(Taller.workspace_id.is_(None)).update(
+        {Taller.workspace_id: workspace.id},
+        synchronize_session=False,
+    )
+    Proceso.query.filter(Proceso.workspace_id.is_(None)).update(
+        {Proceso.workspace_id: workspace.id},
+        synchronize_session=False,
+    )
+    Proceso.query.filter(Proceso.created_by_user_id.is_(None)).update(
+        {Proceso.created_by_user_id: Proceso.user_id},
+        synchronize_session=False,
+    )
+    ImgToPdfJob.query.filter(ImgToPdfJob.workspace_id.is_(None)).update(
+        {ImgToPdfJob.workspace_id: workspace.id},
+        synchronize_session=False,
+    )
+    ImgToPdfJob.query.filter(ImgToPdfJob.created_by_user_id.is_(None)).update(
+        {ImgToPdfJob.created_by_user_id: ImgToPdfJob.user_id},
+        synchronize_session=False,
+    )
 
     db.session.commit()
