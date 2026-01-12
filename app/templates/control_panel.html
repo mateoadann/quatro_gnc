@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero compact">
+  <div>
+    <h1>Panel de control</h1>
+    <p>Gestiona usuarios y visualiza métricas del workspace.</p>
+  </div>
+</section>
+
+<section class="grid stack">
+  <div class="card">
+    <div class="panel-actions panel-actions--between">
+      <h2>Usuarios</h2>
+      <button class="primary-btn" type="button" id="user-create-btn">
+        Crear usuario
+      </button>
+    </div>
+
+    <div class="table-card admin-table">
+      <div class="table-meta">
+        <strong>Usuarios activos: {{ users | selectattr('is_active') | list | length }}</strong>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Nombre</th>
+            <th>Rol</th>
+            <th>Activo</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for user in users %}
+          <tr>
+            <td class="muted">{{ user.username }}</td>
+            <td>
+              <div class="user-name-fields">
+                <input
+                  form="user-update-{{ user.id }}"
+                  type="text"
+                  name="first_name"
+                  value="{{ user.first_name or '' }}"
+                />
+                <input
+                  form="user-update-{{ user.id }}"
+                  type="text"
+                  name="last_name"
+                  value="{{ user.last_name or '' }}"
+                />
+              </div>
+            </td>
+            <td>
+              <div class="select-field select-field--compact">
+                <select form="user-update-{{ user.id }}" name="role">
+                  <option value="user" {% if user.role == 'user' %}selected{% endif %}>Usuario</option>
+                  <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                </select>
+              </div>
+            </td>
+            <td>
+              <label class="checkbox-field checkbox-field--solo">
+                <input
+                  form="user-update-{{ user.id }}"
+                  type="checkbox"
+                  name="is_active"
+                  data-active-toggle
+                  data-form-id="user-update-{{ user.id }}"
+                  data-user-active="{{ '1' if user.is_active else '0' }}"
+                  {% if user.is_active %}checked{% endif %}
+                />
+              </label>
+            </td>
+            <td>
+              <div class="user-actions">
+                <div class="user-password-row">
+                  <div class="input-with-toggle">
+                    <input
+                      type="password"
+                      id="user-password-{{ user.id }}"
+                      name="new_password"
+                      form="user-update-{{ user.id }}"
+                      placeholder="Nueva contraseña"
+                    />
+                    <button
+                      class="toggle-password"
+                      type="button"
+                      data-toggle-password
+                      data-target="user-password-{{ user.id }}"
+                      aria-label="Mostrar contraseña"
+                      aria-pressed="false"
+                    >
+                      <span class="icon-eye" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="presentation">
+                          <path
+                            d="M12 5C6.5 5 2 9.5 1 12c1 2.5 5.5 7 11 7s10-4.5 11-7c-1-2.5-5.5-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </span>
+                      <span class="icon-eye-off" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="presentation">
+                          <path
+                            d="M3.5 4.9 2.1 6.3l3 3C3 10.6 1.7 12 1 13c1 2.5 5.5 7 11 7 2 0 3.8-.5 5.3-1.3l3 3 1.4-1.4L3.5 4.9zM12 18c-3.7 0-6.9-2.5-8.5-5 0-.1 1-1.5 2.9-3.1l2.1 2.1a4 4 0 0 0 5.6 5.6l1.8 1.8c-1.1.4-2.4.6-3.9.6zm0-10a4 4 0 0 1 4 4c0 .6-.1 1.2-.4 1.7l-5.3-5.3c.5-.3 1.1-.4 1.7-.4zm8.5 5c-.4.7-1.3 2.1-2.8 3.3l-2-2a4 4 0 0 0-5.6-5.6L8 6.7c1.2-.5 2.5-.7 4-.7 3.7 0 6.9 2.5 8.5 5z"
+                            fill="currentColor"
+                          />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
+                  <button
+                    class="ghost-btn"
+                    type="button"
+                    data-generate-password
+                    data-target="user-password-{{ user.id }}"
+                    aria-label="Generar contraseña aleatoria"
+                  >
+                    <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true" class="btn-icon">
+                      <path
+                        d="M4 7h6V5L14 8l-4 3V9H5v2H3V7zm16 10h-6v2l-4-3 4-3v2h5v-2h2v4z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                    Generar
+                  </button>
+                  <button
+                    class="ghost-btn success-btn"
+                    type="button"
+                    data-user-save
+                    data-form-id="user-update-{{ user.id }}"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+              <form id="user-update-{{ user.id }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                <input type="hidden" name="action" value="update_user" />
+                <input type="hidden" name="user_id" value="{{ user.id }}" />
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="5" class="muted">No hay usuarios en este workspace.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="metrics-card">
+    {% include "partials/control_panel_metrics.html" %}
+  </div>
+</section>
+
+<section class="grid stack">
+  <div class="card table-card">
+    <div class="card-header">
+      <h2>Ranking por usuario</h2>
+      <p class="muted">Procesos creados por usuario (total y mes actual).</p>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Usuario</th>
+          <th>Nombre</th>
+          <th>Total procesos</th>
+          <th>Mes actual</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in ranking %}
+        <tr>
+          <td>{{ row.username }}</td>
+          <td>{{ row.full_name or '-' }}</td>
+          <td>{{ row.total }}</td>
+          <td>{{ row.month_total }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="muted">Sin datos disponibles.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="modal" id="user-create-modal" aria-hidden="true">
+  <div class="modal-overlay" data-modal-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="user-create-title">
+    <div class="modal-header">
+      <h3 id="user-create-title">Crear usuario</h3>
+      <button class="ghost-btn icon-btn img-icon" type="button" data-modal-close aria-label="Cerrar">
+        ×
+      </button>
+    </div>
+    <form class="form-grid form-grid--stack" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+      <input type="hidden" name="action" value="create_user" />
+      <label>
+        Usuario
+        <input type="text" name="username" required />
+      </label>
+      <label>
+        Nombre
+        <input type="text" name="first_name" />
+      </label>
+      <label>
+        Apellido
+        <input type="text" name="last_name" />
+      </label>
+      <label>
+        Rol
+        <div class="select-field">
+          <select name="role">
+            <option value="user">Usuario</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </label>
+      <label>
+        Contraseña
+        <div class="input-with-toggle">
+          <input type="password" name="password" id="user-create-password" />
+          <button
+            class="toggle-password"
+            type="button"
+            data-toggle-password
+            data-target="user-create-password"
+            aria-label="Mostrar contraseña"
+            aria-pressed="false"
+          >
+            <span class="icon-eye" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path
+                  d="M12 5C6.5 5 2 9.5 1 12c1 2.5 5.5 7 11 7s10-4.5 11-7c-1-2.5-5.5-7-11-7zm0 11a4 4 0 1 1 0-8 4 4 0 0 1 0 8z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+            <span class="icon-eye-off" aria-hidden="true">
+              <svg viewBox="0 0 24 24" role="presentation">
+                <path
+                  d="M3.5 4.9 2.1 6.3l3 3C3 10.6 1.7 12 1 13c1 2.5 5.5 7 11 7 2 0 3.8-.5 5.3-1.3l3 3 1.4-1.4L3.5 4.9zM12 18c-3.7 0-6.9-2.5-8.5-5 0-.1 1-1.5 2.9-3.1l2.1 2.1a4 4 0 0 0 5.6 5.6l1.8 1.8c-1.1.4-2.4.6-3.9.6zm0-10a4 4 0 0 1 4 4c0 .6-.1 1.2-.4 1.7l-5.3-5.3c.5-.3 1.1-.4 1.7-.4zm8.5 5c-.4.7-1.3 2.1-2.8 3.3l-2-2a4 4 0 0 0-5.6-5.6L8 6.7c1.2-.5 2.5-.7 4-.7 3.7 0 6.9 2.5 8.5 5z"
+                  fill="currentColor"
+                />
+              </svg>
+            </span>
+          </button>
+        </div>
+      </label>
+      <div class="form-actions">
+        <button
+          class="ghost-btn success-btn"
+          type="button"
+          id="user-generate-password"
+          aria-label="Generar contraseña aleatoria"
+        >
+          <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true" class="btn-icon">
+            <path
+              d="M4 7h6V5L14 8l-4 3V9H5v2H3V7zm16 10h-6v2l-4-3 4-3v2h5v-2h2v4z"
+              fill="currentColor"
+            />
+          </svg>
+          Generar
+        </button>
+      </div>
+      <div class="modal-actions">
+        <button class="primary-btn" type="submit">Crear usuario</button>
+        <button class="ghost-btn neutral-btn" type="button" data-modal-close>Cancelar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal" id="user-save-modal" aria-hidden="true">
+  <div class="modal-overlay" data-modal-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="user-save-title">
+    <div class="modal-header">
+      <h3 id="user-save-title">Confirmar cambios</h3>
+      <button class="ghost-btn icon-btn img-icon" type="button" data-modal-close aria-label="Cerrar">
+        ×
+      </button>
+    </div>
+    <p class="muted">Vas a guardar los cambios del usuario. ¿Querés continuar?</p>
+    <div class="modal-actions">
+      <button class="ghost-btn neutral-btn" type="button" data-modal-close>Cancelar</button>
+      <button class="primary-btn" type="button" id="user-save-confirm">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="user-active-modal" aria-hidden="true">
+  <div class="modal-overlay" data-modal-close></div>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="user-active-title">
+    <div class="modal-header">
+      <h3 id="user-active-title">Confirmar cambio</h3>
+      <button class="ghost-btn icon-btn img-icon" type="button" data-modal-close aria-label="Cerrar">
+        ×
+      </button>
+    </div>
+    <p class="muted">Vas a cambiar el estado del usuario. ¿Querés continuar?</p>
+    <div class="modal-actions">
+      <button class="ghost-btn neutral-btn" type="button" data-modal-close>Cancelar</button>
+      <button class="primary-btn" type="button" id="user-active-confirm">Confirmar</button>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -10,6 +10,7 @@ load_dotenv()
 class Config:
     APP_ENV = os.getenv("APP_ENV", os.getenv("FLASK_ENV", "development")).lower()
     IS_PRODUCTION = APP_ENV == "production"
+    APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "QuatroGNC")
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change")
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc"

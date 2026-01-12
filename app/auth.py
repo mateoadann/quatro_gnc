@@ -116,6 +116,9 @@ def login():
                 client = None
 
         user = User.query.filter_by(username=username).first()
+        if user and not user.is_active:
+            flash("Usuario desactivado. Contacta al administrador.", "error")
+            return render_template("login.html")
         if not user or not user.check_password(password):
             if client and username:
                 try:

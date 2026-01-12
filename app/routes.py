@@ -2,6 +2,7 @@ import io
 import math
 import os
 import re
+import secrets
 
 from datetime import datetime, timedelta
 
@@ -19,12 +20,12 @@ from flask import current_app
 from flask_login import current_user, login_required
 
 from .extensions import db
-from .models import EnargasCredentials, ImgToPdfJob, Proceso, Taller
+from .models import EnargasCredentials, ImgToPdfJob, Proceso, Taller, User, Workspace
 from .queue import get_queue
 from .services.rpa_session import get_status as get_rpa_session_status
 from .services.img_to_pdf import build_previews, save_previews_to_folder
 
-from sqlalchemy import func, or_
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import joinedload
 
 
@@ -69,9 +70,16 @@ def _wants_json() -> bool:
     return "application/json" in accept
 
 
+def _require_admin():
+    if current_user.role != "admin":
+        flash("No tienes permisos para acceder a esta seccion.", "error")
+        return redirect(url_for("main.dashboard"))
+    return None
+
+
 def _render_proceso_row(proceso):
     talleres = (
-        Taller.query.filter_by(user_id=proceso.user_id)
+        Taller.query.filter_by(workspace_id=proceso.workspace_id)
         .order_by(Taller.nombre.asc())
         .all()
     )
@@ -83,15 +91,15 @@ def _render_proceso_row(proceso):
     )
 
 
-def _mark_stale_processes(user_id: int | None = None) -> int:
+def _mark_stale_processes(workspace_id: int | None = None) -> int:
     minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     if minutes <= 0:
         return 0
 
     threshold = datetime.utcnow() - timedelta(minutes=minutes)
     query = Proceso.query.filter(Proceso.estado == "en proceso")
-    if user_id is not None:
-        query = query.filter(Proceso.user_id == user_id)
+    if workspace_id is not None:
+        query = query.filter(Proceso.workspace_id == workspace_id)
 
     stale_filter = or_(
         Proceso.updated_at < threshold,
@@ -116,9 +124,17 @@ def _mark_stale_processes(user_id: int | None = None) -> int:
 @login_required
 def dashboard():
     img_jobs = (
-        ImgToPdfJob.query.order_by(ImgToPdfJob.created_at.desc()).limit(5).all()
+        ImgToPdfJob.query.filter_by(workspace_id=current_user.workspace_id)
+        .order_by(ImgToPdfJob.created_at.desc())
+        .limit(5)
+        .all()
     )
-    procesos = Proceso.query.order_by(Proceso.created_at.desc()).limit(5).all()
+    procesos = (
+        Proceso.query.filter(Proceso.workspace_id == current_user.workspace_id)
+        .order_by(Proceso.created_at.desc())
+        .limit(5)
+        .all()
+    )
     return render_template("dashboard.html", img_jobs=img_jobs, procesos=procesos)
 
 
@@ -126,7 +142,7 @@ def dashboard():
 @login_required
 def img_to_pdf():
     jobs = (
-        ImgToPdfJob.query.filter_by(user_id=current_user.id)
+        ImgToPdfJob.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(ImgToPdfJob.created_at.desc())
         .all()
     )
@@ -175,6 +191,8 @@ def img_to_pdf_generate():
 
     job = ImgToPdfJob(
         user_id=current_user.id,
+        workspace_id=current_user.workspace_id,
+        created_by_user_id=current_user.id,
         filename=safe_name,
         status="queued",
         page_count=0,
@@ -205,7 +223,7 @@ def img_to_pdf_generate():
 @login_required
 def img_to_pdf_table():
     jobs = (
-        ImgToPdfJob.query.filter_by(user_id=current_user.id)
+        ImgToPdfJob.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(ImgToPdfJob.created_at.desc())
         .all()
     )
@@ -217,7 +235,9 @@ def img_to_pdf_table():
 @main.route("/tools/img-to-pdf/<int:job_id>/download")
 @login_required
 def img_to_pdf_download(job_id):
-    job = ImgToPdfJob.query.filter_by(id=job_id, user_id=current_user.id).first()
+    job = ImgToPdfJob.query.filter_by(
+        id=job_id, workspace_id=current_user.workspace_id
+    ).first()
     if not job or not job.pdf_data:
         flash("El PDF aun no esta disponible.", "error")
         return redirect(url_for("main.img_to_pdf"))
@@ -233,7 +253,9 @@ def img_to_pdf_download(job_id):
 @main.route("/tools/img-to-pdf/<int:job_id>/view")
 @login_required
 def img_to_pdf_view(job_id):
-    job = ImgToPdfJob.query.filter_by(id=job_id, user_id=current_user.id).first()
+    job = ImgToPdfJob.query.filter_by(
+        id=job_id, workspace_id=current_user.workspace_id
+    ).first()
     if not job or not job.pdf_data:
         flash("El PDF aun no esta disponible.", "error")
         return redirect(url_for("main.img_to_pdf"))
@@ -266,7 +288,7 @@ def rpa_enargas():
             flash(message, "error")
             return redirect(url_for("main.settings"))
         if not credentials.get_password():
-            message = "Completa la contrasena de Enargas antes de ejecutar."
+            message = "Completa la contraseña de Enargas antes de ejecutar."
             if _wants_json():
                 return jsonify({"error": message}), 400
             flash(message, "error")
@@ -276,7 +298,9 @@ def rpa_enargas():
         taller_name = request.form.get("taller_name", "").strip()
 
         existing = (
-            Proceso.query.filter_by(user_id=current_user.id, patente=patente)
+            Proceso.query.filter_by(
+                workspace_id=current_user.workspace_id, patente=patente
+            )
             .filter(Proceso.taller_id.isnot(None))
             .order_by(Proceso.created_at.desc())
             .first()
@@ -285,7 +309,7 @@ def rpa_enargas():
         taller_created = False
         if existing and existing.taller_id:
             selected_taller = Taller.query.filter_by(
-                id=existing.taller_id, user_id=current_user.id
+                id=existing.taller_id, workspace_id=current_user.workspace_id
             ).first()
         if existing and existing.taller_id and not selected_taller:
             existing = None
@@ -306,11 +330,12 @@ def rpa_enargas():
                     flash(message, "error")
                     return redirect(url_for("main.rpa_enargas"))
                 selected_taller = Taller.query.filter_by(
-                    user_id=current_user.id, nombre=taller_name
+                    workspace_id=current_user.workspace_id, nombre=taller_name
                 ).first()
                 if not selected_taller:
                     selected_taller = Taller(
                         user_id=current_user.id,
+                        workspace_id=current_user.workspace_id,
                         nombre=taller_name,
                     )
                     db.session.add(selected_taller)
@@ -319,7 +344,7 @@ def rpa_enargas():
             else:
                 try:
                     selected_taller = Taller.query.filter_by(
-                        id=int(taller_id), user_id=current_user.id
+                        id=int(taller_id), workspace_id=current_user.workspace_id
                     ).first()
                 except ValueError:
                     selected_taller = None
@@ -333,6 +358,8 @@ def rpa_enargas():
 
         proceso = Proceso(
             user_id=current_user.id,
+            workspace_id=current_user.workspace_id,
+            created_by_user_id=current_user.id,
             taller_id=selected_taller.id if selected_taller else None,
             patente=patente,
             estado="en proceso",
@@ -356,13 +383,13 @@ def rpa_enargas():
         flash("Proceso en cola. Se actualizara cuando finalice.", "success")
         return redirect(url_for("main.rpa_enargas"))
 
-    _mark_stale_processes(current_user.id)
+    _mark_stale_processes(current_user.workspace_id)
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
+        Proceso.query.filter(Proceso.workspace_id == current_user.workspace_id)
         .outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
@@ -371,13 +398,16 @@ def rpa_enargas():
     procesos, page, total_pages, _total = _paginate_query(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
+        .filter(
+            Proceso.workspace_id == current_user.workspace_id,
+            Proceso.estado == "en proceso",
+        )
         .first()
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
     talleres = (
-        Taller.query.filter_by(user_id=current_user.id)
+        Taller.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(Taller.nombre.asc())
         .all()
     )
@@ -400,13 +430,13 @@ def rpa_enargas():
 @main.route("/tools/rpa-enargas/table")
 @login_required
 def rpa_enargas_table():
-    _mark_stale_processes(current_user.id)
+    _mark_stale_processes(current_user.workspace_id)
     page = request.args.get("page", 1, type=int)
     per_page = current_app.config.get("RPA_PER_PAGE", 10)
     stale_minutes = current_app.config.get("RPA_STALE_MINUTES", 15)
     filters = _parse_filters(request.args)
     query = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
+        Proceso.query.filter(Proceso.workspace_id == current_user.workspace_id)
         .outerjoin(Taller)
         .options(joinedload(Proceso.taller))
     )
@@ -415,13 +445,16 @@ def rpa_enargas_table():
     procesos, page, total_pages, total = _paginate_query_no_count(query, page, per_page)
     has_pending = (
         db.session.query(Proceso.id)
-        .filter(Proceso.user_id == current_user.id, Proceso.estado == "en proceso")
+        .filter(
+            Proceso.workspace_id == current_user.workspace_id,
+            Proceso.estado == "en proceso",
+        )
         .first()
         is not None
     )
     stale_ids = _get_stale_ids(procesos, minutes=stale_minutes)
     talleres = (
-        Taller.query.filter_by(user_id=current_user.id)
+        Taller.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(Taller.nombre.asc())
         .all()
     )
@@ -459,7 +492,9 @@ def rpa_enargas_session_status():
 @main.route("/tools/rpa-enargas/<int:proceso_id>/retry", methods=["POST"])
 @login_required
 def rpa_enargas_retry(proceso_id):
-    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
+    proceso = Proceso.query.filter_by(
+        id=proceso_id, workspace_id=current_user.workspace_id
+    ).first()
     if not proceso:
         message = "Proceso no encontrado."
         if _wants_json():
@@ -491,7 +526,9 @@ def rpa_enargas_retry(proceso_id):
 def rpa_enargas_update_taller(proceso_id):
     payload = request.get_json(silent=True) or {}
     raw_taller_id = payload.get("taller_id")
-    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
+    proceso = Proceso.query.filter_by(
+        id=proceso_id, workspace_id=current_user.workspace_id
+    ).first()
     if not proceso:
         return jsonify({"error": "Proceso no encontrado."}), 404
 
@@ -508,7 +545,9 @@ def rpa_enargas_update_taller(proceso_id):
     except (TypeError, ValueError):
         return jsonify({"error": "Taller invalido."}), 400
 
-    taller = Taller.query.filter_by(id=taller_id, user_id=current_user.id).first()
+    taller = Taller.query.filter_by(
+        id=taller_id, workspace_id=current_user.workspace_id
+    ).first()
     if not taller:
         return jsonify({"error": "Taller no encontrado."}), 404
 
@@ -535,7 +574,7 @@ def rpa_enargas_delete():
         return jsonify({"error": "Selecciona al menos un proceso."}), 400
 
     procesos = (
-        Proceso.query.filter(Proceso.user_id == current_user.id)
+        Proceso.query.filter(Proceso.workspace_id == current_user.workspace_id)
         .filter(Proceso.id.in_(ids))
         .all()
     )
@@ -573,7 +612,9 @@ def rpa_enargas_preview(proceso_id):
 
 
 def _send_proceso_pdf(proceso_id, as_attachment):
-    proceso = Proceso.query.filter_by(id=proceso_id, user_id=current_user.id).first()
+    proceso = Proceso.query.filter_by(
+        id=proceso_id, workspace_id=current_user.workspace_id
+    ).first()
     if not proceso or not proceso.pdf_data:
         flash("No hay PDF disponible para este proceso.", "error")
         return redirect(url_for("main.rpa_enargas"))
@@ -686,8 +727,26 @@ def _apply_sort(query, filters):
 @login_required
 def settings():
     credentials = EnargasCredentials.query.filter_by(user_id=current_user.id).first()
+    workspace = getattr(current_user, "workspace", None) or Workspace.query.first()
 
     if request.method == "POST":
+        form_type = request.form.get("form_type", "credentials")
+        if form_type == "workspace":
+            workspace_name = request.form.get("workspace_name", "").strip()
+            if not workspace_name:
+                flash("El nombre del workspace es obligatorio.", "error")
+                return redirect(url_for("main.settings"))
+            if workspace:
+                workspace.name = workspace_name
+                db.session.commit()
+                flash("Nombre del workspace actualizado.", "success")
+                return redirect(url_for("main.settings"))
+            workspace = Workspace(name=workspace_name)
+            db.session.add(workspace)
+            db.session.commit()
+            flash("Workspace creado.", "success")
+            return redirect(url_for("main.settings"))
+
         enargas_user = request.form.get("enargas_user", "").strip()
         enargas_password = request.form.get("enargas_password", "").strip()
         if not enargas_user:
@@ -696,10 +755,11 @@ def settings():
 
         if not credentials:
             if not enargas_password:
-                flash("La contrasena de Enargas es obligatoria.", "error")
+                flash("La contraseña de Enargas es obligatoria.", "error")
                 return redirect(url_for("main.settings"))
             credentials = EnargasCredentials(
                 user_id=current_user.id,
+                workspace_id=workspace.id if workspace else None,
                 enargas_user=enargas_user,
             )
             credentials.set_password(enargas_password)
@@ -708,6 +768,8 @@ def settings():
             credentials.enargas_user = enargas_user
             if enargas_password:
                 credentials.set_password(enargas_password)
+            if workspace and not credentials.workspace_id:
+                credentials.workspace_id = workspace.id
 
         db.session.commit()
         flash("Configuracion actualizada.", "success")
@@ -725,4 +787,269 @@ def settings():
         "settings.html",
         credentials=credentials,
         masked_password=masked_password,
+        workspace_name=workspace.name if workspace else "",
     )
+
+
+@main.route("/control-panel", methods=["GET", "POST"])
+@login_required
+def control_panel():
+    guard = _require_admin()
+    if guard:
+        return guard
+
+    workspace_id = current_user.workspace_id
+
+    if request.method == "POST":
+        action = request.form.get("action", "")
+        if action == "create_user":
+            username = (request.form.get("username") or "").strip()
+            first_name = (request.form.get("first_name") or "").strip()
+            last_name = (request.form.get("last_name") or "").strip()
+            role = (request.form.get("role") or "user").strip().lower()
+            password = (request.form.get("password") or "").strip()
+
+            if not username:
+                flash("El usuario es obligatorio.", "error")
+                return redirect(url_for("main.control_panel"))
+            if User.query.filter_by(username=username).first():
+                flash("Ese usuario ya existe.", "error")
+                return redirect(url_for("main.control_panel"))
+
+            if not password:
+                flash("Ingresa una contraseña o usa el generador.", "error")
+                return redirect(url_for("main.control_panel"))
+
+            new_user = User(
+                username=username,
+                first_name=first_name,
+                last_name=last_name,
+                role="admin" if role == "admin" else "user",
+                is_active=True,
+                workspace_id=workspace_id,
+            )
+            new_user.set_password(password)
+            db.session.add(new_user)
+            db.session.commit()
+            flash("Usuario creado correctamente.", "success")
+
+        elif action == "update_user":
+            user_id = request.form.get("user_id", type=int)
+            if not user_id:
+                flash("Usuario invalido.", "error")
+                return redirect(url_for("main.control_panel"))
+            user = User.query.filter_by(id=user_id, workspace_id=workspace_id).first()
+            if not user:
+                flash("Usuario no encontrado.", "error")
+                return redirect(url_for("main.control_panel"))
+
+            user.first_name = (request.form.get("first_name") or "").strip()
+            user.last_name = (request.form.get("last_name") or "").strip()
+            role = (request.form.get("role") or "user").strip().lower()
+            user.role = "admin" if role == "admin" else "user"
+            user.is_active = request.form.get("is_active") == "on"
+            new_password = (request.form.get("new_password") or "").strip()
+
+            if user.id == current_user.id and not user.is_active:
+                user.is_active = True
+                flash("No puedes desactivar tu propio usuario.", "error")
+            else:
+                flash("Usuario actualizado.", "success")
+
+            if new_password:
+                user.set_password(new_password)
+                flash(
+                    f"Contraseña para {user.username}: {new_password}",
+                    "success persistent",
+                )
+
+            db.session.commit()
+
+        elif action == "reset_password":
+            user_id = request.form.get("user_id", type=int)
+            if not user_id:
+                flash("Usuario invalido.", "error")
+                return redirect(url_for("main.control_panel"))
+            user = User.query.filter_by(id=user_id, workspace_id=workspace_id).first()
+            if not user:
+                flash("Usuario no encontrado.", "error")
+                return redirect(url_for("main.control_panel"))
+
+            reset_mode = request.form.get("reset_mode", "manual")
+            new_password = (request.form.get("new_password") or "").strip()
+            if reset_mode == "random" or not new_password:
+                new_password = secrets.token_urlsafe(9)
+
+            user.set_password(new_password)
+            db.session.commit()
+            flash("Contraseña actualizada.", "success")
+            flash(
+                f"Contraseña para {user.username}: {new_password}",
+                "success persistent",
+            )
+
+        return redirect(url_for("main.control_panel"))
+
+    users = (
+        User.query.filter_by(workspace_id=workspace_id)
+        .order_by(User.created_at.asc())
+        .all()
+    )
+
+    m_from = (request.args.get("m_from") or "").strip()
+    m_to = (request.args.get("m_to") or "").strip()
+
+    monthly_metrics, total_metric_sum = _build_monthly_metrics(
+        workspace_id, m_from, m_to
+    )
+
+    month_start = datetime.utcnow().replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+    ranking_rows = (
+        db.session.query(
+            User.id,
+            User.username,
+            User.first_name,
+            User.last_name,
+            func.count(Proceso.id).label("total"),
+            func.sum(
+                case(
+                    (Proceso.created_at >= month_start, 1),
+                    else_=0,
+                )
+            ).label("month_total"),
+        )
+        .outerjoin(
+            Proceso,
+            and_(
+                Proceso.created_by_user_id == User.id,
+                Proceso.workspace_id == workspace_id,
+            ),
+        )
+        .filter(User.workspace_id == workspace_id)
+        .group_by(User.id)
+        .order_by(func.count(Proceso.id).desc())
+        .all()
+    )
+
+    ranking = [
+        {
+            "username": row.username,
+            "full_name": f"{row.first_name or ''} {row.last_name or ''}".strip(),
+            "total": row.total or 0,
+            "month_total": row.month_total or 0,
+        }
+        for row in ranking_rows
+    ]
+
+    return render_template(
+        "control_panel.html",
+        users=users,
+        monthly_metrics=monthly_metrics,
+        ranking=ranking,
+        m_from=m_from,
+        m_to=m_to,
+        total_metric_sum=total_metric_sum,
+    )
+
+
+@main.route("/control-panel/metrics")
+@login_required
+def control_panel_metrics():
+    guard = _require_admin()
+    if guard:
+        return guard
+
+    workspace_id = current_user.workspace_id
+    m_from = (request.args.get("m_from") or "").strip()
+    m_to = (request.args.get("m_to") or "").strip()
+    monthly_metrics, total_metric_sum = _build_monthly_metrics(
+        workspace_id, m_from, m_to
+    )
+    return render_template(
+        "partials/control_panel_metrics.html",
+        monthly_metrics=monthly_metrics,
+        total_metric_sum=total_metric_sum,
+        m_from=m_from,
+        m_to=m_to,
+    )
+
+
+def _build_monthly_metrics(workspace_id: int, m_from: str, m_to: str):
+    def _parse_date(value: str):
+        for fmt in ("%Y-%m-%d", "%Y-%m"):
+            try:
+                return datetime.strptime(value, fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _next_month(value: datetime) -> datetime:
+        year = value.year + (value.month // 12)
+        month = (value.month % 12) + 1
+        return datetime(year, month, 1)
+
+    start_month = _parse_date(m_from) if m_from else None
+    end_month = _parse_date(m_to) if m_to else None
+
+    month_label = func.date_trunc("month", Proceso.created_at).label("month")
+    monthly_query = (
+        db.session.query(
+            month_label,
+            Proceso.resultado,
+            func.count(Proceso.id).label("total"),
+        )
+        .filter(
+            Proceso.workspace_id == workspace_id,
+            Proceso.estado == "completado",
+            Proceso.resultado.in_(
+                ["Renovación de Oblea", "Prueba Hidraulica", "Prueba Hidráulica"]
+            ),
+        )
+        .group_by(month_label, Proceso.resultado)
+    )
+    if start_month:
+        monthly_query = monthly_query.filter(Proceso.created_at >= start_month)
+    if end_month:
+        monthly_query = monthly_query.filter(Proceso.created_at < _next_month(end_month))
+
+    monthly_rows = monthly_query.order_by(month_label.desc()).all()
+
+    monthly_data = {}
+    months_es = [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+    ]
+    for month_value, resultado, total in monthly_rows:
+        label = f"{months_es[month_value.month - 1]} {month_value.year}"
+        monthly_data.setdefault(
+            label,
+            {"Renovación de Oblea": 0, "Prueba Hidraulica": 0},
+        )
+        if resultado in ("Prueba Hidráulica", "Prueba Hidraulica"):
+            monthly_data[label]["Prueba Hidraulica"] += total
+        elif resultado == "Renovación de Oblea":
+            monthly_data[label]["Renovación de Oblea"] += total
+
+    monthly_metrics = [
+        {
+            "month": label,
+            "renovacion": values["Renovación de Oblea"],
+            "ph": values["Prueba Hidraulica"],
+            "total": values["Renovación de Oblea"] + values["Prueba Hidraulica"],
+        }
+        for label, values in monthly_data.items()
+    ]
+    total_metric_sum = sum(row["total"] for row in monthly_metrics)
+    return monthly_metrics, total_metric_sum

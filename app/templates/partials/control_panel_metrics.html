@@ -1,0 +1,57 @@
+<div class="card">
+  <h2>Métricas mensuales</h2>
+  <p class="muted">Solo procesos completados con Renovación o Prueba Hidraulica.</p>
+  <form
+    class="form-grid metrics-filters"
+    method="get"
+    id="metrics-form"
+    data-metrics-url="{{ url_for('main.control_panel_metrics') }}"
+  >
+    <div class="form-row metrics-filters__row">
+      <label>
+        Desde
+        <input type="date" name="m_from" value="{{ m_from or '' }}" />
+      </label>
+      <label>
+        Hasta
+        <input type="date" name="m_to" value="{{ m_to or '' }}" />
+      </label>
+      <div class="form-actions metrics-filters__actions">
+        <button class="primary-btn" type="submit">Aplicar</button>
+        <button class="ghost-btn neutral-btn" type="button" id="metrics-clear">
+          Limpiar
+        </button>
+      </div>
+    </div>
+  </form>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Mes</th>
+          <th>Renovación de Oblea</th>
+          <th>Prueba Hidraulica</th>
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in monthly_metrics %}
+        <tr>
+          <td>{{ row.month }}</td>
+          <td>{{ row.renovacion }}</td>
+          <td>{{ row.ph }}</td>
+          <td>{{ row.total }}</td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="4" class="muted">Sin datos disponibles.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="table-meta metrics-total metrics-total--footer">
+    <strong>Total en el rango:</strong>
+    <span>{{ total_metric_sum }}</span>
+  </div>
+</div>

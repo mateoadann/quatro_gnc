@@ -64,6 +64,8 @@ services:
       - POSTGRES_DB=quatro_gnc
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
 
   redis:
     image: redis:7-alpine
