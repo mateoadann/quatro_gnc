@@ -4,7 +4,7 @@
 <section class="hero compact">
   <div>
     <h1>Panel de control</h1>
-    <p>Gestiona usuarios y visualiza métricas del workspace.</p>
+    <p>Gestiona usuarios del workspace.</p>
   </div>
 </section>
 
@@ -149,43 +149,6 @@
         </tbody>
       </table>
     </div>
-  </div>
-
-  <div id="metrics-card">
-    {% include "partials/control_panel_metrics.html" %}
-  </div>
-</section>
-
-<section class="grid stack">
-  <div class="card table-card">
-    <div class="card-header">
-      <h2>Ranking por usuario</h2>
-      <p class="muted">Procesos creados por usuario (total y mes actual).</p>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Usuario</th>
-          <th>Nombre</th>
-          <th>Total procesos</th>
-          <th>Mes actual</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in ranking %}
-        <tr>
-          <td>{{ row.username }}</td>
-          <td>{{ row.full_name or '-' }}</td>
-          <td>{{ row.total }}</td>
-          <td>{{ row.month_total }}</td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="4" class="muted">Sin datos disponibles.</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
   </div>
 </section>
 

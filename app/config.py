@@ -27,8 +27,6 @@ class Config:
         os.getenv("ALLOW_SEED_DEMO", "false" if IS_PRODUCTION else "true").lower()
         == "true"
     )
-    ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "")
-
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SECURE = os.getenv(
         "SESSION_COOKIE_SECURE",
@@ -51,8 +49,6 @@ class Config:
     SESSION_USE_SIGNER = True
     SESSION_REDIS = redis.from_url(REDIS_URL) if SESSION_TYPE == "redis" else None
     RQ_DEFAULT_TIMEOUT = int(os.getenv("RQ_DEFAULT_TIMEOUT", "900"))
-    RPA_PER_PAGE = int(os.getenv("RPA_PER_PAGE", "10"))
-    RPA_STALE_MINUTES = int(os.getenv("RPA_STALE_MINUTES", "15"))
     LOGIN_RATE_LIMIT = int(os.getenv("LOGIN_RATE_LIMIT", "5"))
     LOGIN_RATE_WINDOW = int(os.getenv("LOGIN_RATE_WINDOW", "60"))
     LOGIN_FAIL_LIMIT = int(os.getenv("LOGIN_FAIL_LIMIT", "5"))

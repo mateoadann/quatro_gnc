@@ -1,108 +1,11 @@
 from . import create_app
 from .extensions import db
-from .models import EnargasCredentials, ImgToPdfJob, Proceso
-from .queue import get_queue
+from .models import ImgToPdfJob
 import traceback
 from pathlib import Path
 import shutil
 
-from .services.rpa_enargas import NoOperacionesError, SessionActivaError, run_rpa
-from .services.process_pdf_enargas import analyze_pdf_bytes
 from .services.img_to_pdf import create_pdf_from_files
-
-
-def process_rpa_job(proceso_id: int) -> None:
-    app = create_app()
-    with app.app_context():
-        proceso = Proceso.query.get(proceso_id)
-        if not proceso:
-            return
-
-        credentials = EnargasCredentials.query.filter_by(user_id=proceso.user_id).first()
-        if not credentials:
-            proceso.estado = "error"
-            proceso.resultado = None
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            proceso.error_message = "Credenciales de Enargas no configuradas."
-            db.session.commit()
-            return
-
-        enargas_password = credentials.get_password()
-        if not enargas_password:
-            proceso.estado = "error"
-            proceso.resultado = None
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            proceso.error_message = "Contrasena de Enargas no configurada."
-            db.session.commit()
-            return
-
-        try:
-            result = run_rpa(proceso.patente, credentials.enargas_user, enargas_password)
-            proceso.estado = "completado"
-            proceso.resultado = None
-            proceso.pdf_data = result.get("pdf_data")
-            proceso.pdf_filename = result.get("pdf_filename")
-            proceso.error_message = None
-        except NoOperacionesError:
-            proceso.estado = "completado"
-            proceso.resultado = "Patente NO registrada"
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            proceso.error_message = None
-        except SessionActivaError:
-            proceso.estado = "completado"
-            proceso.resultado = "Sesión Activa"
-            proceso.pdf_data = None
-            proceso.pdf_filename = None
-            proceso.error_message = "Reintentar"
-        except Exception as exc:
-            message = str(exc or "").lower()
-            if "credenciales invalidas" in message:
-                proceso.estado = "completado"
-                proceso.resultado = "Credenciales inválidas"
-                proceso.pdf_data = None
-                proceso.pdf_filename = None
-                proceso.error_message = (
-                    "Credenciales de Enargas inválidas. "
-                    "Revisa Usuario > Credenciales."
-                )
-            else:
-                proceso.estado = "error"
-                proceso.resultado = None
-                proceso.pdf_data = None
-                proceso.pdf_filename = None
-                proceso.error_message = _format_error()
-
-        db.session.commit()
-
-        if proceso.estado == "completado" and proceso.pdf_data:
-            queue = get_queue()
-            queue.enqueue("app.tasks.process_pdf_job", proceso.id)
-
-
-def process_pdf_job(proceso_id: int) -> None:
-    app = create_app()
-    with app.app_context():
-        proceso = Proceso.query.get(proceso_id)
-        if not proceso or not proceso.pdf_data:
-            return
-
-        try:
-            fields = analyze_pdf_bytes(proceso.pdf_data)
-            resultado = fields.get("resultado")
-            if resultado:
-                proceso.resultado = resultado
-                proceso.error_message = None
-            else:
-                proceso.resultado = None
-                proceso.error_message = "No se pudo determinar el resultado del PDF."
-        except Exception:
-            proceso.resultado = None
-            proceso.error_message = _format_error()
-
-        db.session.commit()
 
 
 def process_img_to_pdf_job(job_id: int, image_paths: list[str]) -> None:
@@ -151,13 +54,6 @@ def _cleanup_img_pdf_files(image_paths: list[str]) -> None:
             shutil.rmtree(parent, ignore_errors=True)
         except Exception:
             pass
-
-
-def _format_error() -> str:
-    detail = traceback.format_exc()
-    if not detail:
-        return "Error desconocido en el proceso RPA."
-    return detail[-1200:]
 
 
 def _format_img_pdf_error(exc: Exception) -> str:

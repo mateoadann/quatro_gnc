@@ -42,30 +42,5 @@
     </table>
   </div>
 
-  <div class="card">
-    <h2>Proceso Enargas recientes</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Patente</th>
-          <th>Estado</th>
-          <th>Resultado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for proceso in procesos %}
-        <tr>
-          <td>{{ proceso.patente }}</td>
-          <td><span class="badge {{ proceso.estado|replace(' ', '-') }}">{{ proceso.estado }}</span></td>
-          <td>{{ proceso.resultado or "-" }}</td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="3" class="muted">Sin ejecuciones aun.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
 </section>
 {% endblock %}
