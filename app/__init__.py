@@ -22,6 +22,11 @@ def create_app():
     app.config.from_object(Config)
     _validate_security_config(app)
 
+    # Ensure flask_sessions directory exists for filesystem sessions
+    session_dir = app.config.get("SESSION_FILE_DIR")
+    if session_dir:
+        os.makedirs(session_dir, exist_ok=True)
+
     if app.config.get("IS_PRODUCTION"):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
@@ -89,8 +94,6 @@ def _validate_security_config(app):
         raise RuntimeError("SECRET_KEY debe configurarse en produccion.")
     if not app.config.get("SESSION_COOKIE_SECURE"):
         raise RuntimeError("SESSION_COOKIE_SECURE debe ser true en produccion.")
-    if app.config.get("SESSION_TYPE") == "filesystem":
-        raise RuntimeError("SESSION_TYPE no puede ser filesystem en produccion.")
 
 
 def _configure_logging():

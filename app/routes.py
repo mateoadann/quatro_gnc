@@ -1,7 +1,8 @@
 import io
-import os
+import logging
 import re
 import secrets
+import traceback
 
 from datetime import datetime
 
@@ -20,9 +21,10 @@ from flask_login import current_user, login_required
 
 from .extensions import db
 from .models import ImgToPdfJob, User, Workspace
-from .queue import get_queue
-from .services.img_to_pdf import build_previews, save_previews_to_folder
+from .services.img_to_pdf import build_previews, create_pdf_from_data_urls
 
+
+logger = logging.getLogger(__name__)
 
 main = Blueprint("main", __name__)
 
@@ -43,6 +45,17 @@ def _require_admin():
         flash("No tienes permisos para acceder a esta seccion.", "error")
         return redirect(url_for("main.dashboard"))
     return None
+
+
+def _format_img_pdf_error(exc: Exception) -> str:
+    detail = str(exc or "")
+    if "No se pudo leer la imagen" in detail:
+        return "No se pudo leer una de las imagenes. Verifica el formato."
+    if "No se recibieron imágenes" in detail or "No se recibieron imagenes" in detail:
+        return "No se recibieron imagenes validas para generar el PDF."
+    if "No se pudo codificar la imagen" in detail:
+        return "No se pudo procesar una imagen. Intenta con otra foto."
+    return "No se pudo generar el PDF. Intenta nuevamente."
 
 
 @main.route("/")
@@ -113,29 +126,29 @@ def img_to_pdf_generate():
         workspace_id=current_user.workspace_id,
         created_by_user_id=current_user.id,
         filename=safe_name,
-        status="queued",
+        status="processing",
         page_count=0,
     )
     db.session.add(job)
     db.session.commit()
 
-    folder = os.path.join("debug", "img_to_pdf", str(job.id))
     try:
-        image_paths = save_previews_to_folder(images, folder)
-    except ValueError as exc:
-        db.session.delete(job)
+        pdf_bytes, page_count = create_pdf_from_data_urls(images)
+        job.pdf_data = pdf_bytes
+        job.page_count = page_count
+        job.pdf_filename = safe_name
+        job.status = "done"
+        job.error_message = None
         db.session.commit()
-        return jsonify({"error": str(exc)}), 400
-    except Exception:
-        db.session.delete(job)
+    except Exception as exc:
+        logger.error("IMG_to_PDF generation failed: %s", traceback.format_exc())
+        job.status = "error"
+        job.error_message = _format_img_pdf_error(exc)
         db.session.commit()
-        return jsonify({"error": "No se pudieron preparar las imagenes."}), 500
-
-    queue = get_queue()
-    queue.enqueue("app.tasks.process_img_to_pdf_job", job.id, image_paths)
+        return jsonify({"error": job.error_message}), 500
 
     row_html = _render_img_job_row(job)
-    return jsonify({"job_id": job.id, "row_html": row_html})
+    return jsonify({"job_id": job.id, "row_html": row_html, "status": job.status})
 
 
 @main.route("/tools/img-to-pdf/table")
@@ -146,9 +159,8 @@ def img_to_pdf_table():
         .order_by(ImgToPdfJob.created_at.desc())
         .all()
     )
-    has_pending = any(job.status in {"queued", "processing", "pending"} for job in jobs)
     html = render_template("partials/img_to_pdf_rows.html", jobs=jobs)
-    return jsonify({"html": html, "has_pending": has_pending})
+    return jsonify({"html": html, "has_pending": False})
 
 
 @main.route("/tools/img-to-pdf/<int:job_id>/download")

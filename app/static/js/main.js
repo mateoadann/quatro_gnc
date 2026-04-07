@@ -960,7 +960,6 @@ if (imgGenerateBtn) {
         imgFilenameInput.value = "";
       }
       setGenerateLoading(false);
-      refreshImgTable();
     } catch (error) {
       showToast(error.message);
       setGenerateLoading(false);
@@ -968,17 +967,12 @@ if (imgGenerateBtn) {
   });
 }
 
-let imgRefreshTimer = null;
 const refreshImgTable = async () => {
   if (!imgRefreshCard || !imgTableBody) {
     return;
   }
   const url = imgRefreshCard.dataset.imgRefreshUrl;
-  const interval = Number.parseInt(
-    imgRefreshCard.dataset.imgRefreshInterval || "5000",
-    10
-  );
-  if (!url || Number.isNaN(interval)) {
+  if (!url) {
     return;
   }
   try {
@@ -988,16 +982,7 @@ const refreshImgTable = async () => {
     }
     const payload = await safeJson(response);
     imgTableBody.innerHTML = payload.html;
-    if (payload.has_pending) {
-      imgRefreshTimer = setTimeout(refreshImgTable, interval);
-    } else {
-      imgRefreshTimer = null;
-    }
   } catch (error) {
-    imgRefreshTimer = setTimeout(refreshImgTable, interval);
+    // Silently ignore refresh errors
   }
 };
-
-if (imgRefreshCard && imgTableBody) {
-  refreshImgTable();
-}

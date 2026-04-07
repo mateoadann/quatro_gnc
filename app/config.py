@@ -1,7 +1,5 @@
 import os
 
-import redis
-
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,15 +38,11 @@ class Config:
     WTF_CSRF_ENABLED = os.getenv("WTF_CSRF_ENABLED", "true").lower() == "true"
     WTF_CSRF_TIME_LIMIT = int(os.getenv("WTF_CSRF_TIME_LIMIT", "3600"))
 
-    REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    SESSION_TYPE = os.getenv(
-        "SESSION_TYPE",
-        "redis" if IS_PRODUCTION else "filesystem",
-    )
+    SESSION_TYPE = "filesystem"
+    SESSION_FILE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "flask_sessions")
+    SESSION_FILE_THRESHOLD = 100
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
-    SESSION_REDIS = redis.from_url(REDIS_URL) if SESSION_TYPE == "redis" else None
-    RQ_DEFAULT_TIMEOUT = int(os.getenv("RQ_DEFAULT_TIMEOUT", "900"))
     LOGIN_RATE_LIMIT = int(os.getenv("LOGIN_RATE_LIMIT", "5"))
     LOGIN_RATE_WINDOW = int(os.getenv("LOGIN_RATE_WINDOW", "60"))
     LOGIN_FAIL_LIMIT = int(os.getenv("LOGIN_FAIL_LIMIT", "5"))
