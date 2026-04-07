@@ -1,0 +1,14 @@
+*.pyc
+__pycache__
+.git
+.gitignore
+debug/
+flask_sessions/
+data/
+*.md
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+.DS_Store
