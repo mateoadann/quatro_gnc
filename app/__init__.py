@@ -27,6 +27,14 @@ def create_app():
     if session_dir:
         os.makedirs(session_dir, exist_ok=True)
 
+    # Ensure data/ directory exists for SQLite database
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if db_uri.startswith("sqlite:///"):
+        db_path = db_uri.replace("sqlite:///", "", 1)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+
     if app.config.get("IS_PRODUCTION"):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
@@ -66,6 +74,13 @@ def create_app():
     @app.cli.command("init-db")
     def init_db():
         with app.app_context():
+            # Ensure data/ directory exists for SQLite
+            uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            if uri.startswith("sqlite:///"):
+                db_path = uri.replace("sqlite:///", "", 1)
+                db_dir = os.path.dirname(db_path)
+                if db_dir:
+                    os.makedirs(db_dir, exist_ok=True)
             db.create_all()
         click.echo("Database initialized")
 

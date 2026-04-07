@@ -4,20 +4,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_basedir = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
+_default_db_path = os.path.join(_basedir, "data", "quatro_gnc.db")
+_DEFAULT_SQLITE_URI = f"sqlite:///{_default_db_path}"
+
 
 class Config:
     APP_ENV = os.getenv("APP_ENV", os.getenv("FLASK_ENV", "development")).lower()
     IS_PRODUCTION = APP_ENV == "production"
     APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "QuatroGNC")
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change")
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        "DATABASE_URL", "postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc"
-    )
+    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", _DEFAULT_SQLITE_URI)
     SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        "pool_pre_ping": True,
-        "pool_recycle": 300,
-    }
 
     DEFAULT_ADMIN_USER = os.getenv("DEFAULT_ADMIN_USER", "")
     DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "")
