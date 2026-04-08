@@ -205,6 +205,19 @@ def img_to_pdf_download(job_id):
     )
 
 
+@main.route("/tools/img-to-pdf/<int:job_id>/delete", methods=["POST"])
+@login_required
+def img_to_pdf_delete(job_id):
+    job = ImgToPdfJob.query.filter_by(
+        id=job_id, workspace_id=current_user.workspace_id
+    ).first()
+    if not job:
+        return jsonify({"error": "No encontrado."}), 404
+    db.session.delete(job)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+
 @main.route("/tools/img-to-pdf/<int:job_id>/view")
 @login_required
 def img_to_pdf_view(job_id):

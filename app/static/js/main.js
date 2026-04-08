@@ -1017,3 +1017,35 @@ const loadImgPage = async (page) => {
     showToast("No se pudo cargar la página.", "error", 4200);
   }
 };
+
+if (imgTableBody) {
+  imgTableBody.addEventListener("click", async (event) => {
+    const btn = event.target.closest("[data-delete-url]");
+    if (!btn) {
+      return;
+    }
+    if (!confirm("¿Eliminar este registro?")) {
+      return;
+    }
+    const url = btn.dataset.deleteUrl;
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "X-Requested-With": "fetch",
+          "X-CSRFToken": getImgPdfCsrf(),
+        },
+      });
+      const payload = await safeJson(response);
+      if (!response.ok) {
+        throw new Error(payload.error || "No se pudo eliminar el registro.");
+      }
+      const row = btn.closest("tr");
+      if (row) {
+        row.remove();
+      }
+    } catch (error) {
+      showToast(error.message, "error", 4200);
+    }
+  });
+}

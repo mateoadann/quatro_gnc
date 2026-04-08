@@ -34,6 +34,19 @@
     {% else %}
       <span class="muted">-</span>
     {% endif %}
+    <button
+      type="button"
+      class="ghost-btn icon-btn img-icon img-icon--delete"
+      aria-label="Eliminar registro"
+      data-delete-url="{{ url_for('main.img_to_pdf_delete', job_id=job.id) }}"
+    >
+      <svg viewBox="0 0 24 24" role="presentation" aria-hidden="true">
+        <path
+          d="M9 3h6a1 1 0 0 1 1 1v1h4a1 1 0 1 1 0 2h-1v12a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V7H4a1 1 0 1 1 0-2h4V4a1 1 0 0 1 1-1zm0 4H7v12h10V7h-2v9a1 1 0 1 1-2 0V7h-2v9a1 1 0 1 1-2 0V7z"
+          fill="currentColor"
+        />
+      </svg>
+    </button>
   </td>
 </tr>
 {% endfor %}
