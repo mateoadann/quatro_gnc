@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timedelta
 
 import click
 from flask import Flask
@@ -97,6 +98,23 @@ def create_app():
             db.create_all()
             _bootstrap_workspace(app)
         click.echo("Workspace actualizado")
+
+    @app.cli.command("cleanup-old-jobs")
+    def cleanup_old_jobs():
+        """Delete ImgToPdfJob records older than 20 days."""
+        with app.app_context():
+            try:
+                cutoff = datetime.utcnow() - timedelta(days=20)
+                deleted = (
+                    db.session.query(ImgToPdfJob)
+                    .filter(ImgToPdfJob.created_at < cutoff)
+                    .delete(synchronize_session=False)
+                )
+                db.session.commit()
+                click.echo(f"Cleanup: {deleted} jobs eliminados (anteriores a {cutoff.date()}).")
+            except Exception as e:
+                db.session.rollback()
+                click.echo(f"Error durante el cleanup: {e}", err=True)
 
     return app
 
