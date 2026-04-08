@@ -7,37 +7,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
-    libgobject-2.0-0 \
-    libnss3 \
-    libnspr4 \
-    libdbus-1-3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libgio-2.0-0 \
-    libexpat1 \
-    libdrm2 \
-    libxcb1 \
-    libxkbcommon0 \
-    libx11-6 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libcairo2 \
-    libasound2 \
-    libatspi2.0-0 \
-    libgtk-3-0 \
+    libgl1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
-RUN python -m playwright install chromium
 
 COPY . .
 
-CMD ["gunicorn", "-b", "0.0.0.0:5000", "wsgi:app"]
+RUN mkdir -p /app/flask_sessions /app/data /app/debug
+
+CMD ["gunicorn", "-w", "2", "--timeout", "120", "-b", "0.0.0.0:5000", "wsgi:app"]

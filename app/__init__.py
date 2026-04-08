@@ -9,11 +9,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from .config import Config
 from .extensions import csrf, db, login_manager, session_store
 from .models import (
-    EnargasCredentials,
     ImgToPdfJob,
-    Proceso,
-    RpaEnargasJob,
-    Taller,
     User,
     Workspace,
 )
@@ -25,6 +21,19 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     _validate_security_config(app)
+
+    # Ensure flask_sessions directory exists for filesystem sessions
+    session_dir = app.config.get("SESSION_FILE_DIR")
+    if session_dir:
+        os.makedirs(session_dir, exist_ok=True)
+
+    # Ensure data/ directory exists for SQLite database
+    db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    if db_uri.startswith("sqlite:///"):
+        db_path = db_uri.replace("sqlite:///", "", 1)
+        db_dir = os.path.dirname(db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
 
     if app.config.get("IS_PRODUCTION"):
         app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
@@ -65,6 +74,13 @@ def create_app():
     @app.cli.command("init-db")
     def init_db():
         with app.app_context():
+            # Ensure data/ directory exists for SQLite
+            uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            if uri.startswith("sqlite:///"):
+                db_path = uri.replace("sqlite:///", "", 1)
+                db_dir = os.path.dirname(db_path)
+                if db_dir:
+                    os.makedirs(db_dir, exist_ok=True)
             db.create_all()
         click.echo("Database initialized")
 
@@ -91,12 +107,8 @@ def _validate_security_config(app):
 
     if app.config.get("SECRET_KEY") in ("", "dev-secret-change"):
         raise RuntimeError("SECRET_KEY debe configurarse en produccion.")
-    if not app.config.get("ENCRYPTION_KEY"):
-        raise RuntimeError("ENCRYPTION_KEY debe configurarse en produccion.")
     if not app.config.get("SESSION_COOKIE_SECURE"):
         raise RuntimeError("SESSION_COOKIE_SECURE debe ser true en produccion.")
-    if app.config.get("SESSION_TYPE") == "filesystem":
-        raise RuntimeError("SESSION_TYPE no puede ser filesystem en produccion.")
 
 
 def _configure_logging():
@@ -134,14 +146,6 @@ def _seed_data(app):
         default_user.role = "admin"
         db.session.commit()
 
-    if not EnargasCredentials.query.filter_by(user_id=default_user.id).first():
-        credentials = EnargasCredentials(
-            user_id=default_user.id,
-            enargas_user="demo_enargas",
-        )
-        credentials.set_password("demo_password")
-        db.session.add(credentials)
-
     if not ImgToPdfJob.query.first():
         db.session.add(
             ImgToPdfJob(
@@ -157,46 +161,6 @@ def _seed_data(app):
                 filename="camara_03.zip",
                 page_count=12,
                 status="processing",
-            )
-        )
-
-    if not RpaEnargasJob.query.first():
-        db.session.add(
-            RpaEnargasJob(
-                user_id=default_user.id,
-                patente="AB123CD",
-                status="done",
-                result_code="valid",
-                pdf_filename="enargas_AB123CD.pdf",
-            )
-        )
-        db.session.add(
-            RpaEnargasJob(
-                user_id=default_user.id,
-                patente="XY987ZT",
-                status="queued",
-                result_code="pending",
-                pdf_filename=None,
-            )
-        )
-
-    if not Proceso.query.first():
-        db.session.add(
-            Proceso(
-                user_id=default_user.id,
-                patente="AA123BB",
-                estado="completado",
-                resultado="Revonar Oblea",
-                pdf_filename="proceso_AA123BB.pdf",
-            )
-        )
-        db.session.add(
-            Proceso(
-                user_id=default_user.id,
-                patente="ABC123",
-                estado="en proceso",
-                resultado=None,
-                pdf_filename=None,
             )
         )
 
@@ -231,22 +195,6 @@ def _bootstrap_workspace(app):
             {User.role: "admin"},
             synchronize_session=False,
         )
-    EnargasCredentials.query.filter(EnargasCredentials.workspace_id.is_(None)).update(
-        {EnargasCredentials.workspace_id: workspace.id},
-        synchronize_session=False,
-    )
-    Taller.query.filter(Taller.workspace_id.is_(None)).update(
-        {Taller.workspace_id: workspace.id},
-        synchronize_session=False,
-    )
-    Proceso.query.filter(Proceso.workspace_id.is_(None)).update(
-        {Proceso.workspace_id: workspace.id},
-        synchronize_session=False,
-    )
-    Proceso.query.filter(Proceso.created_by_user_id.is_(None)).update(
-        {Proceso.created_by_user_id: Proceso.user_id},
-        synchronize_session=False,
-    )
     ImgToPdfJob.query.filter(ImgToPdfJob.workspace_id.is_(None)).update(
         {ImgToPdfJob.workspace_id: workspace.id},
         synchronize_session=False,

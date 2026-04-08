@@ -5,45 +5,16 @@ services:
       - "5001:5000"
     volumes:
       - ./debug:/app/debug
+      - flask_sessions:/app/flask_sessions
+      - sqlite_data:/app/data
     environment:
       - APP_ENV=${APP_ENV:-development}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - SECRET_KEY=${SECRET_KEY:-dev-secret-change}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key}
-      - SESSION_TYPE=${SESSION_TYPE:-filesystem}
       - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
       - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-Lax}
       - DEFAULT_ADMIN_USER=${DEFAULT_ADMIN_USER:-}
       - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-}
-      - RPA_HEADLESS=${RPA_HEADLESS:-true}
-      - RPA_STALE_MINUTES=${RPA_STALE_MINUTES:-15}
-      - GUNICORN_CMD_ARGS=--timeout 120 --keep-alive 5 --access-logfile - --error-logfile -
-    depends_on:
-      - db
-      - redis
-
-  worker:
-    build: .
-    command: ["python", "worker.py"]
-    volumes:
-      - ./debug:/app/debug
-    environment:
-      - APP_ENV=${APP_ENV:-development}
-      - DATABASE_URL=${DATABASE_URL:-postgresql+psycopg://postgres:postgres@db:5432/quatro_gnc}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - SECRET_KEY=${SECRET_KEY:-dev-secret-change}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY:-dev-encryption-key}
-      - SESSION_TYPE=${SESSION_TYPE:-filesystem}
-      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-false}
-      - SESSION_COOKIE_SAMESITE=${SESSION_COOKIE_SAMESITE:-Lax}
-      - DEFAULT_ADMIN_USER=${DEFAULT_ADMIN_USER:-}
-      - DEFAULT_ADMIN_PASSWORD=${DEFAULT_ADMIN_PASSWORD:-}
-      - RPA_HEADLESS=${RPA_HEADLESS:-true}
-      - RPA_STALE_MINUTES=${RPA_STALE_MINUTES:-15}
-    depends_on:
-      - db
-      - redis
+      - GUNICORN_CMD_ARGS=--workers 2 --timeout 120 --keep-alive 5 --access-logfile - --error-logfile -
 
   nginx:
     image: nginx:1.27-alpine
@@ -56,19 +27,6 @@ services:
     depends_on:
       - web
 
-  db:
-    image: postgres:16
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=quatro_gnc
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5433:5432"
-
-  redis:
-    image: redis:7-alpine
-
 volumes:
-  postgres_data:
+  sqlite_data:
+  flask_sessions:

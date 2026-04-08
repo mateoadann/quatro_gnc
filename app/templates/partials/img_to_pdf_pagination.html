@@ -1,0 +1,19 @@
+{% if total_pages > 1 %}
+<div class="pagination" id="img-pdf-pagination">
+  <button
+    class="ghost-btn"
+    type="button"
+    onclick="loadImgPage({{ current_page - 1 }})"
+    {% if not has_prev %}aria-disabled="true"{% endif %}
+  >Anterior</button>
+
+  <span class="muted">Página {{ current_page }} de {{ total_pages }}</span>
+
+  <button
+    class="ghost-btn"
+    type="button"
+    onclick="loadImgPage({{ current_page + 1 }})"
+    {% if not has_next %}aria-disabled="true"{% endif %}
+  >Siguiente</button>
+</div>
+{% endif %}

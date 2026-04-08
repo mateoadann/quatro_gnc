@@ -50,6 +50,9 @@
 <section class="grid stack">
   <div class="card img-pdf-history" data-img-refresh-url="{{ url_for('main.img_to_pdf_table') }}" data-img-refresh-interval="5000">
     <h2>Historial</h2>
+    <div id="img-pdf-pagination-container-top" class="pagination-wrapper">
+      {% include "partials/img_to_pdf_pagination.html" %}
+    </div>
     <table>
       <thead>
         <tr>
@@ -69,6 +72,9 @@
         {% endif %}
       </tbody>
     </table>
+    <div id="img-pdf-pagination-container" class="pagination-wrapper">
+      {% include "partials/img_to_pdf_pagination.html" %}
+    </div>
   </div>
 </section>
 

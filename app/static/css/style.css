@@ -136,29 +136,6 @@ body {
   max-width: 520px;
 }
 
-.session-status {
-  display: none;
-  background: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(228, 217, 203, 0.8);
-  border-radius: var(--radius);
-  padding: 12px 18px;
-  box-shadow: var(--shadow);
-  margin-top: 16px;
-}
-
-.session-status.is-visible {
-  display: block;
-}
-
-.session-status__content {
-  font-weight: 600;
-  color: var(--accent-strong);
-}
-
-.session-status__content strong {
-  color: var(--accent);
-}
-
 .hero-actions {
   display: flex;
   gap: 12px;
@@ -287,47 +264,6 @@ body {
   font-size: 0.9rem;
 }
 
-.filter-chips {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.chip-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.chip-label {
-  font-size: 0.85rem;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.chip {
-  border: 1px solid var(--line);
-  background: #fff;
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 0.85rem;
-  color: var(--muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.chip:hover {
-  border-color: var(--accent-2);
-  color: var(--ink);
-}
-
-.chip.is-active {
-  background: rgba(11, 107, 111, 0.15);
-  border-color: rgba(11, 107, 111, 0.4);
-  color: var(--accent-strong);
-}
-
 th.sortable {
   cursor: pointer;
   position: relative;
@@ -397,88 +333,10 @@ th.sortable.is-active.is-asc::after {
   border-color: #d6c4b2;
 }
 
-.select-col {
-  width: 34px;
-  text-align: center;
-}
-
-.select-col input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
-}
-
-.rpa-taller-select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  padding: 6px 30px 6px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: #fff6ec;
-  font-size: 0.95rem;
-  font-family: inherit;
-  color: var(--ink);
-  min-width: 140px;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
-    linear-gradient(135deg, var(--muted) 50%, transparent 50%);
-  background-position: calc(100% - 16px) 55%, calc(100% - 10px) 55%;
-  background-size: 6px 6px, 6px 6px;
-  background-repeat: no-repeat;
-}
-
-.rpa-taller-select:focus {
-  outline: 2px solid rgba(11, 107, 111, 0.25);
-  border-color: var(--accent);
-}
-
-.rpa-taller-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.filter-drawer {
-  position: fixed;
-  inset: 0;
-  display: none;
-  z-index: 32;
-}
-
-.filter-drawer.is-open {
-  display: block;
-}
-
-.filter-drawer__overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(31, 27, 22, 0.35);
-}
-
-.filter-drawer__panel {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: min(380px, 90vw);
-  height: 100%;
-  background: var(--card);
-  border-left: 1px solid rgba(228, 217, 203, 0.8);
-  padding: 20px;
-  box-shadow: var(--shadow);
+.pagination-wrapper {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
-}
-
-.filter-drawer__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.pending-row {
-  opacity: 0.7;
+  justify-content: flex-end;
+  padding: 8px 0;
 }
 
 .pagination {
@@ -486,6 +344,10 @@ th.sortable.is-active.is-asc::after {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.pagination-wrapper:empty {
+  display: none;
 }
 
 .pagination .ghost-btn[aria-disabled="true"] {
@@ -1192,41 +1054,6 @@ td {
   color: #a34343;
 }
 
-.badge.result-renovacion {
-  background: rgba(233, 185, 45, 0.22);
-  color: #a9740f;
-}
-
-.badge.result-habilitado {
-  background: rgba(11, 107, 111, 0.18);
-  color: var(--accent-strong);
-}
-
-.badge.result-hidraulica {
-  background: rgba(200, 106, 43, 0.2);
-  color: #98521f;
-}
-
-.badge.result-no-registrada {
-  background: rgba(111, 101, 87, 0.2);
-  color: var(--muted);
-}
-
-.badge.result-sesion {
-  background: rgba(66, 122, 191, 0.2);
-  color: #2f5d8f;
-}
-
-.badge.result-credenciales {
-  background: rgba(188, 60, 60, 0.15);
-  color: #a34343;
-}
-
-.badge.result-neutral {
-  background: #f0ebe2;
-  color: var(--muted);
-}
-
 .badge.en-proceso::after {
   content: "";
   position: absolute;
@@ -1443,10 +1270,6 @@ td {
 
   .filter-bar__row {
     grid-template-columns: 1fr;
-  }
-
-  .filter-chips {
-    gap: 12px;
   }
 }
 
