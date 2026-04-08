@@ -36,6 +36,24 @@ def data_url_from_png(data: bytes) -> str:
     return f"data:image/png;base64,{b64}"
 
 
+def _encode_preview_jpeg(image_bgr: np.ndarray, max_dim: int = 900, quality: int = 75) -> bytes:
+    h, w = image_bgr.shape[:2]
+    if max(h, w) > max_dim:
+        scale = max_dim / max(h, w)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+        image_bgr = cv2.resize(image_bgr, (new_w, new_h), interpolation=cv2.INTER_AREA)
+    ok, buffer = cv2.imencode(".jpg", image_bgr, [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not ok:
+        raise ValueError("No se pudo codificar la imagen como JPEG.")
+    return buffer.tobytes()
+
+
+def data_url_from_jpeg(data: bytes) -> str:
+    b64 = base64.b64encode(data).decode("ascii")
+    return f"data:image/jpeg;base64,{b64}"
+
+
 def _enhance_full_image(image_bgr: np.ndarray, enhance_mode: str) -> np.ndarray:
     gray = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2GRAY)
     mode = (enhance_mode or "soft").lower()
@@ -91,7 +109,7 @@ def build_previews(
             source_key = file_storage.filename or str(idx)
         image = _decode_image_bytes(data)
         full_processed = _enhance_full_image(image, enhance_mode)
-        full_data_url = data_url_from_png(_encode_image_png(full_processed))
+        full_data_url = data_url_from_jpeg(_encode_preview_jpeg(full_processed))
 
         docs_left = MAX_DOCS - len(processed_images)
         if docs_left <= 0:
@@ -114,7 +132,7 @@ def build_previews(
                 {
                     "id": len(previews),
                     "source_key": source_key,
-                    "data_url": data_url_from_png(_encode_image_png(doc)),
+                    "data_url": data_url_from_jpeg(_encode_preview_jpeg(doc)),
                     "full_data_url": full_data_url,
                     "width": doc.shape[1],
                     "height": doc.shape[0],
