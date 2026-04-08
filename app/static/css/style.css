@@ -333,11 +333,21 @@ th.sortable.is-active.is-asc::after {
   border-color: #d6c4b2;
 }
 
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 0;
+}
+
 .pagination {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.pagination-wrapper:empty {
+  display: none;
 }
 
 .pagination .ghost-btn[aria-disabled="true"] {

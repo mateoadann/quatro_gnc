@@ -387,6 +387,7 @@ const imgFilenameInput = document.querySelector("#img-pdf-filename");
 const imgRefreshCard = document.querySelector("[data-img-refresh-url]");
 const imgTableBody = document.querySelector("#img-pdf-table-body");
 const imgPaginationContainer = document.querySelector("#img-pdf-pagination-container");
+const imgPaginationContainerTop = document.querySelector("#img-pdf-pagination-container-top");
 const imgUploadList = document.querySelector("#img-upload-list");
 const getImgPdfCsrf = () => {
   if (!imgForm) {
@@ -983,8 +984,9 @@ const refreshImgTable = async () => {
     }
     const payload = await safeJson(response);
     imgTableBody.innerHTML = payload.html;
-    if (imgPaginationContainer && payload.pagination_html !== undefined) {
-      imgPaginationContainer.innerHTML = payload.pagination_html;
+    if (payload.pagination_html !== undefined) {
+      if (imgPaginationContainer) imgPaginationContainer.innerHTML = payload.pagination_html;
+      if (imgPaginationContainerTop) imgPaginationContainerTop.innerHTML = payload.pagination_html;
     }
   } catch (error) {
     // Silently ignore refresh errors
@@ -1007,8 +1009,9 @@ const loadImgPage = async (page) => {
     }
     const payload = await safeJson(response);
     imgTableBody.innerHTML = payload.html;
-    if (imgPaginationContainer && payload.pagination_html !== undefined) {
-      imgPaginationContainer.innerHTML = payload.pagination_html;
+    if (payload.pagination_html !== undefined) {
+      if (imgPaginationContainer) imgPaginationContainer.innerHTML = payload.pagination_html;
+      if (imgPaginationContainerTop) imgPaginationContainerTop.innerHTML = payload.pagination_html;
     }
   } catch (error) {
     showToast("No se pudo cargar la página.", "error", 4200);
