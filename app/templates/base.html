@@ -15,7 +15,7 @@
         <a class="brand" href="{{ url_for('main.dashboard') }}">{{ workspace_name }}</a>
         <nav class="nav-links">
           <a href="{{ url_for('main.img_to_pdf') }}" class="{% if request.endpoint == 'main.img_to_pdf' %}active{% endif %}">
-            IMG_to_PDF
+            Procesar Imágenes
           </a>
           {% if current_user.role == 'admin' %}
           <a href="{{ url_for('main.control_panel') }}" class="{% if request.endpoint == 'main.control_panel' %}active{% endif %}">

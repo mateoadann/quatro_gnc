@@ -73,12 +73,21 @@ def dashboard():
 @main.route("/tools/img-to-pdf")
 @login_required
 def img_to_pdf():
-    jobs = (
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    pagination = (
         ImgToPdfJob.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(ImgToPdfJob.created_at.desc())
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
-    return render_template("img_to_pdf.html", jobs=jobs)
+    return render_template(
+        "img_to_pdf.html",
+        jobs=pagination.items,
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+        has_prev=pagination.has_prev,
+        has_next=pagination.has_next,
+    )
 
 
 def _render_img_job_row(job):
@@ -154,13 +163,28 @@ def img_to_pdf_generate():
 @main.route("/tools/img-to-pdf/table")
 @login_required
 def img_to_pdf_table():
-    jobs = (
+    page = request.args.get("page", 1, type=int)
+    per_page = 20
+    pagination = (
         ImgToPdfJob.query.filter_by(workspace_id=current_user.workspace_id)
         .order_by(ImgToPdfJob.created_at.desc())
-        .all()
+        .paginate(page=page, per_page=per_page, error_out=False)
     )
-    html = render_template("partials/img_to_pdf_rows.html", jobs=jobs)
-    return jsonify({"html": html, "has_pending": False})
+    html = render_template("partials/img_to_pdf_rows.html", jobs=pagination.items)
+    pagination_html = render_template(
+        "partials/img_to_pdf_pagination.html",
+        current_page=pagination.page,
+        total_pages=pagination.pages,
+        has_prev=pagination.has_prev,
+        has_next=pagination.has_next,
+    )
+    return jsonify({
+        "html": html,
+        "pagination_html": pagination_html,
+        "has_pending": False,
+        "current_page": pagination.page,
+        "total_pages": pagination.pages,
+    })
 
 
 @main.route("/tools/img-to-pdf/<int:job_id>/download")
