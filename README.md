@@ -1,113 +1,92 @@
 # QuatroGNC Dashboard
 
-Primeros pasos para un dashboard Flask con dos herramientas: IMG_to_PDF y RPA_Enargas.
+Dashboard Flask para gestión de documentos de vehículos GNC. Herramienta principal: **Procesar Imágenes** (IMG_to_PDF) — convierte fotos de DNI, carnets y documentos en PDFs imprimibles.
 
-## Features incluidas
-- Login/logout con usuarios locales (Flask-Login).
-- Layout responsivo con navbar para alternar herramientas.
-- Seccion de usuario para editar credenciales Enargas.
-- Base de datos SQLite con SQLAlchemy y tablas iniciales.
-- Dockerfile y docker-compose para despliegue rapido.
+## Stack
 
-## Requisitos
-- Python 3.11+
-- SQLite 3 (incluido en Python)
+- **Backend**: Flask 3.0.3, SQLAlchemy ORM, SQLite
+- **Frontend**: Jinja2, vanilla JS, vanilla CSS
+- **Servidor**: Gunicorn + Nginx (Docker)
+- **Seguridad**: Flask-WTF CSRF, rate limiting en login, sesiones filesystem
 
 ## Configuracion local
-1) Crear entorno virtual e instalar dependencias:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-2) Crear un `.env` desde el ejemplo:
-
-```bash
 cp .env.example .env
-```
 
-3) Inicializar y poblar la base:
-
-```bash
 flask --app run.py init-db
 flask --app run.py seed-db
-```
-
-4) Ejecutar:
-
-```bash
 python run.py
 ```
 
-Login:
-- Usar el usuario local creado con `seed-db` o uno cargado en la base.
+App disponible en `http://localhost:5050`.
 
-## Seguridad (produccion)
-- Setear `APP_ENV=production`.
-- Usar valores reales para `SECRET_KEY` y `ENCRYPTION_KEY`.
-- `SESSION_COOKIE_SECURE=true`.
-- `ALLOW_SEED_DEMO=false` para evitar usuarios/demo.
-- Rate limit y bloqueo por intentos fallidos en login:
-  - `LOGIN_RATE_LIMIT`, `LOGIN_RATE_WINDOW`
-  - `LOGIN_FAIL_LIMIT`, `LOGIN_LOCKOUT_SECONDS`
+## Docker (produccion)
 
-## Docker
+Stack de 2 servicios: `web` (Flask + Gunicorn) + `nginx`.
 
 ```bash
 docker compose up --build
-```
-
-Luego inicializa la base con:
-
-```bash
 docker compose exec web flask --app run.py init-db
-docker compose exec web flask --app run.py seed-db
 ```
 
-Si queres levantar solo el servicio web:
+## Variables de entorno
+
+| Variable | Descripcion | Default |
+|---|---|---|
+| `APP_ENV` | `development` / `production` | `development` |
+| `SECRET_KEY` | Clave secreta Flask | `dev-secret-change` |
+| `DATABASE_URL` | SQLite path | `sqlite:///data/quatro_gnc.db` |
+| `SESSION_COOKIE_SECURE` | HTTPS only cookies | `false` |
+| `SESSION_COOKIE_SAMESITE` | Cookie SameSite | `Lax` |
+
+## Comandos CLI
 
 ```bash
-docker compose up --build web
+# Inicializar base de datos
+flask --app run.py init-db
+
+# Poblar con datos de demo
+flask --app run.py seed-db
+
+# Eliminar registros con mas de 20 dias (corre automaticamente a las 23hs ART)
+flask --app run.py cleanup-old-jobs
 ```
 
-## Reverse proxy con Nginx (pre-produccion)
+## Migracion de datos
 
-Incluye un contenedor `nginx` que expone el puerto 80 y reenvia al servicio `web`.
+Para migrar desde PostgreSQL a SQLite (solo necesario en cutover de servidor):
 
-1) Configura variables seguras en tu `.env` (no en el repo):
 ```bash
-APP_ENV=production
-SECRET_KEY=...
-ENCRYPTION_KEY=...
-SESSION_TYPE=redis
-SESSION_COOKIE_SECURE=true
+# 1. Backup del PostgreSQL origen
+./scripts/backup_pg.sh "postgresql+psycopg://user:pass@host/db"
+
+# 2. Migracion selectiva (dry-run primero)
+pip install "psycopg[binary]"
+python scripts/migrate_pg_to_sqlite.py --pg-url "postgresql+psycopg://..." --dry-run
+python scripts/migrate_pg_to_sqlite.py --pg-url "postgresql+psycopg://..."
 ```
 
-2) Levanta los servicios:
-```bash
-docker compose up --build
-```
+## Auto-delete
 
-3) Cuando tengas el dominio y el certificado HTTPS, agrega los certificados
-en `./nginx/certs` y configura el bloque `server` en Nginx para el puerto 443.
+Cron configurado en el servidor (02:00 UTC = 23:00 ART) que elimina automaticamente todos los registros con mas de 20 dias, incluyendo los PDFs almacenados.
 
-## Integracion de herramientas
-El codigo de ambas herramientas debe integrarse en:
-- `app/services/img_to_pdf.py`
-- `app/services/rpa_enargas.py`
+Log en `/var/log/quatro_gnc_cleanup.log`.
 
-Luego se puede conectar la logica a nuevos endpoints en `app/routes.py`.
+## Seguridad
 
-## Usuarios locales
-- Los usuarios se guardan en la base local con password hash.
-- En desarrollo podes crear uno con `seed-db` o insertarlo manualmente.
+- Rate limiting en login (in-memory, configurable)
+- CSRF en todos los formularios y requests AJAX
+- Workspace-scoped: cada usuario solo accede a datos de su workspace
+- SSH hardening + UFW + fail2ban en produccion
 
-## GitHub
-Documentacion de ramas, protecciones y CI: `docs/github_workflow.md`.
+## Produccion (AWS Lightsail)
 
-## Versionado y feature flags
-- Changelog: `CHANGELOG.md`
-- Versionado y releases: `docs/versioning.md`
-- Feature flags (SaaS): `docs/feature_flags.md`
+- Instancia: 1 vCPU, 1GB RAM + 2GB swap
+- OS: Ubuntu 24.04 LTS
+- SSL: Cloudflare (modo Flexible)
+- Dominio: quatrognc.org
+- RAM idle: ~170MB | RAM pico (6 imagenes): ~350-400MB
