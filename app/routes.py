@@ -4,7 +4,7 @@ import re
 import secrets
 import traceback
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import (
     Blueprint,
@@ -376,3 +376,21 @@ def control_panel():
         "control_panel.html",
         users=users,
     )
+
+
+@main.route("/cron/cleanup-jobs")
+def cron_cleanup_jobs():
+    # Vercel Cron sends "Authorization: Bearer $CRON_SECRET"
+    expected = current_app.config.get("CRON_SECRET", "")
+    provided = request.headers.get("Authorization", "")
+    if not expected or not secrets.compare_digest(provided.encode(), f"Bearer {expected}".encode()):
+        return jsonify({"error": "unauthorized"}), 401
+
+    cutoff = datetime.utcnow() - timedelta(days=20)
+    deleted = (
+        ImgToPdfJob.query.filter(ImgToPdfJob.created_at < cutoff)
+        .delete(synchronize_session=False)
+    )
+    db.session.commit()
+    logger.info("Cleanup: %s jobs eliminados (anteriores a %s).", deleted, cutoff.date())
+    return jsonify({"deleted": deleted})
