@@ -386,7 +386,7 @@ def cron_cleanup_jobs():
     if not expected or not secrets.compare_digest(provided.encode(), f"Bearer {expected}".encode()):
         return jsonify({"error": "unauthorized"}), 401
 
-    cutoff = datetime.utcnow() - timedelta(days=20)
+    cutoff = datetime.utcnow() - timedelta(days=current_app.config["JOB_RETENTION_DAYS"])
     deleted = (
         ImgToPdfJob.query.filter(ImgToPdfJob.created_at < cutoff)
         .delete(synchronize_session=False)

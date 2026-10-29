@@ -41,6 +41,7 @@ Las tablas se crean con `flask --app run.py init-db` apuntando `DATABASE_URL` a 
 | `APP_ENV` | `development` / `production` | `development` |
 | `SECRET_KEY` | Clave secreta Flask (firma la cookie de sesión) | `dev-secret-change` |
 | `DATABASE_URL` | Postgres (Neon) o SQLite | `sqlite:///data/quatro_gnc.db` |
+| `JOB_RETENTION_DAYS` | Días que se guardan los jobs antes del borrado automático | `20` |
 | `CRON_SECRET` | Token que Vercel Cron manda a `/cron/cleanup-jobs` | vacío (ruta deshabilitada) |
 | `SESSION_COOKIE_SECURE` | HTTPS only cookies | `false` |
 | `SESSION_COOKIE_SAMESITE` | Cookie SameSite | `Lax` |
@@ -57,7 +58,7 @@ flask --app run.py seed-db
 
 ## Auto-delete
 
-Vercel Cron (`vercel.json`, 02:00 UTC = 23:00 ART) llama a `/cron/cleanup-jobs`, que elimina los registros con más de 20 días, incluyendo los PDFs almacenados.
+Vercel Cron (`vercel.json`, 02:00 UTC = 23:00 ART) llama a `/cron/cleanup-jobs`, que elimina los registros con más de `JOB_RETENTION_DAYS` días (20 por defecto), incluyendo los PDFs almacenados.
 
 ## Limites
 

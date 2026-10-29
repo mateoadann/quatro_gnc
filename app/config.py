@@ -47,3 +47,4 @@ class Config:
     LOGIN_FAIL_LIMIT = int(os.getenv("LOGIN_FAIL_LIMIT", "5"))
     LOGIN_LOCKOUT_SECONDS = int(os.getenv("LOGIN_LOCKOUT_SECONDS", "600"))
     CRON_SECRET = os.getenv("CRON_SECRET", "")
+    JOB_RETENTION_DAYS = int(os.getenv("JOB_RETENTION_DAYS", "20"))
