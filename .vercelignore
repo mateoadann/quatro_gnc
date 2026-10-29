@@ -1,0 +1,10 @@
+.venv
+data
+debug
+flask_session
+flask_sessions
+docs
+scripts
+.atl
+.claude
+app/services/img_pdf/dni-pdf-api

@@ -1,14 +1,12 @@
 import logging
 import os
-from datetime import datetime, timedelta
-
 import click
 from flask import Flask
 from flask_login import current_user
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 from .config import Config
-from .extensions import csrf, db, login_manager, session_store
+from .extensions import csrf, db, login_manager
 from .models import (
     ImgToPdfJob,
     User,
@@ -22,11 +20,6 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     _validate_security_config(app)
-
-    # Ensure flask_sessions directory exists for filesystem sessions
-    session_dir = app.config.get("SESSION_FILE_DIR")
-    if session_dir:
-        os.makedirs(session_dir, exist_ok=True)
 
     # Ensure data/ directory exists for SQLite database
     db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
@@ -42,7 +35,6 @@ def create_app():
     db.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
-    session_store.init_app(app)
 
     from .auth import auth
     from .routes import main
@@ -98,23 +90,6 @@ def create_app():
             db.create_all()
             _bootstrap_workspace(app)
         click.echo("Workspace actualizado")
-
-    @app.cli.command("cleanup-old-jobs")
-    def cleanup_old_jobs():
-        """Delete ImgToPdfJob records older than 20 days."""
-        with app.app_context():
-            try:
-                cutoff = datetime.utcnow() - timedelta(days=20)
-                deleted = (
-                    db.session.query(ImgToPdfJob)
-                    .filter(ImgToPdfJob.created_at < cutoff)
-                    .delete(synchronize_session=False)
-                )
-                db.session.commit()
-                click.echo(f"Cleanup: {deleted} jobs eliminados (anteriores a {cutoff.date()}).")
-            except Exception as e:
-                db.session.rollback()
-                click.echo(f"Error durante el cleanup: {e}", err=True)
 
     return app
 

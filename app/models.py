@@ -65,3 +65,11 @@ class ImgToPdfJob(db.Model):
     updated_at = db.Column(
         db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class LoginThrottle(db.Model):
+    """Login attempt counters; keys are "ip:<addr>" or "user:<name>"."""
+
+    key = db.Column(db.String(200), primary_key=True)
+    count = db.Column(db.Integer, nullable=False, default=0)
+    expires_at = db.Column(db.DateTime, nullable=False)

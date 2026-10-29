@@ -4,10 +4,10 @@ Dashboard Flask para gestión de documentos de vehículos GNC. Herramienta princ
 
 ## Stack
 
-- **Backend**: Flask 3.0.3, SQLAlchemy ORM, SQLite
+- **Backend**: Flask 3.0.3, SQLAlchemy ORM, PostgreSQL (Neon) en producción, SQLite en local
 - **Frontend**: Jinja2, vanilla JS, vanilla CSS
-- **Servidor**: Gunicorn + Nginx (Docker)
-- **Seguridad**: Flask-WTF CSRF, rate limiting en login, sesiones filesystem
+- **Hosting**: Vercel (Python 3.12, Fluid Compute, región `gru1`)
+- **Seguridad**: Flask-WTF CSRF, rate limiting en login (en la DB), sesiones en cookie firmada
 
 ## Configuracion local
 
@@ -22,24 +22,27 @@ flask --app run.py seed-db
 python run.py
 ```
 
-App disponible en `http://localhost:5050`.
+App disponible en `http://localhost:5050`. Sin `DATABASE_URL` usa SQLite en `data/quatro_gnc.db`.
 
-## Docker (produccion)
+## Deploy
 
-Stack de 2 servicios: `web` (Flask + Gunicorn) + `nginx`.
+Proyecto Vercel `mateo-adans-projects/quatro-gnc`, con la base Neon conectada por la integración del Marketplace.
 
 ```bash
-docker compose up --build
-docker compose exec web flask --app run.py init-db
+vercel --prod
 ```
+
+Las tablas se crean con `flask --app run.py init-db` apuntando `DATABASE_URL` a Neon (`vercel env pull`).
 
 ## Variables de entorno
 
 | Variable | Descripcion | Default |
 |---|---|---|
 | `APP_ENV` | `development` / `production` | `development` |
-| `SECRET_KEY` | Clave secreta Flask | `dev-secret-change` |
-| `DATABASE_URL` | SQLite path | `sqlite:///data/quatro_gnc.db` |
+| `SECRET_KEY` | Clave secreta Flask (firma la cookie de sesión) | `dev-secret-change` |
+| `DATABASE_URL` | Postgres (Neon) o SQLite | `sqlite:///data/quatro_gnc.db` |
+| `JOB_RETENTION_DAYS` | Días que se guardan los jobs antes del borrado automático | `20` |
+| `CRON_SECRET` | Token que Vercel Cron manda a `/cron/cleanup-jobs` | vacío (ruta deshabilitada) |
 | `SESSION_COOKIE_SECURE` | HTTPS only cookies | `false` |
 | `SESSION_COOKIE_SAMESITE` | Cookie SameSite | `Lax` |
 
@@ -51,42 +54,22 @@ flask --app run.py init-db
 
 # Poblar con datos de demo
 flask --app run.py seed-db
-
-# Eliminar registros con mas de 20 dias (corre automaticamente a las 23hs ART)
-flask --app run.py cleanup-old-jobs
-```
-
-## Migracion de datos
-
-Para migrar desde PostgreSQL a SQLite (solo necesario en cutover de servidor):
-
-```bash
-# 1. Backup del PostgreSQL origen
-./scripts/backup_pg.sh "postgresql+psycopg://user:pass@host/db"
-
-# 2. Migracion selectiva (dry-run primero)
-pip install "psycopg[binary]"
-python scripts/migrate_pg_to_sqlite.py --pg-url "postgresql+psycopg://..." --dry-run
-python scripts/migrate_pg_to_sqlite.py --pg-url "postgresql+psycopg://..."
 ```
 
 ## Auto-delete
 
-Cron configurado en el servidor (02:00 UTC = 23:00 ART) que elimina automaticamente todos los registros con mas de 20 dias, incluyendo los PDFs almacenados.
+Vercel Cron (`vercel.json`, 02:00 UTC = 23:00 ART) llama a `/cron/cleanup-jobs`, que elimina los registros con más de `JOB_RETENTION_DAYS` días (20 por defecto), incluyendo los PDFs almacenados.
 
-Log en `/var/log/quatro_gnc_cleanup.log`.
+## Limites
+
+- Vercel rechaza requests de más de 4.5 MB: el navegador achica las fotos (máx. 1800px, JPEG) antes de subirlas.
 
 ## Seguridad
 
-- Rate limiting en login (in-memory, configurable)
+- Rate limiting por IP y bloqueo por usuario en login (tabla `login_throttle`, configurable)
 - CSRF en todos los formularios y requests AJAX
 - Workspace-scoped: cada usuario solo accede a datos de su workspace
-- SSH hardening + UFW + fail2ban en produccion
 
-## Produccion (AWS Lightsail)
+## Produccion
 
-- Instancia: 1 vCPU, 1GB RAM + 2GB swap
-- OS: Ubuntu 24.04 LTS
-- SSL: Cloudflare (modo Flexible)
-- Dominio: quatrognc.org
-- RAM idle: ~170MB | RAM pico (6 imagenes): ~350-400MB
+- URL: https://quatrognc.org (DNS en Cloudflare, sin proxy, apuntando a Vercel)

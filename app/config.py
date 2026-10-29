@@ -1,4 +1,5 @@
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -14,7 +15,12 @@ class Config:
     IS_PRODUCTION = APP_ENV == "production"
     APP_BRAND_NAME = os.getenv("APP_BRAND_NAME", "QuatroGNC")
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change")
-    SQLALCHEMY_DATABASE_URI = os.getenv("DATABASE_URL", _DEFAULT_SQLITE_URI)
+    # Neon hands out postgres:// URLs; SQLAlchemy needs the psycopg (v3) driver name
+    SQLALCHEMY_DATABASE_URI = re.sub(
+        r"^postgres(ql)?://", "postgresql+psycopg://", os.getenv("DATABASE_URL", _DEFAULT_SQLITE_URI)
+    )
+    # Serverless instances sit idle between requests; drop dead connections instead of erroring
+    SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True, "pool_recycle": 300}
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     DEFAULT_ADMIN_USER = os.getenv("DEFAULT_ADMIN_USER", "")
@@ -36,12 +42,9 @@ class Config:
     WTF_CSRF_ENABLED = os.getenv("WTF_CSRF_ENABLED", "true").lower() == "true"
     WTF_CSRF_TIME_LIMIT = int(os.getenv("WTF_CSRF_TIME_LIMIT", "3600"))
 
-    SESSION_TYPE = "filesystem"
-    SESSION_FILE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "flask_sessions")
-    SESSION_FILE_THRESHOLD = 100
-    SESSION_PERMANENT = False
-    SESSION_USE_SIGNER = True
     LOGIN_RATE_LIMIT = int(os.getenv("LOGIN_RATE_LIMIT", "5"))
     LOGIN_RATE_WINDOW = int(os.getenv("LOGIN_RATE_WINDOW", "60"))
     LOGIN_FAIL_LIMIT = int(os.getenv("LOGIN_FAIL_LIMIT", "5"))
     LOGIN_LOCKOUT_SECONDS = int(os.getenv("LOGIN_LOCKOUT_SECONDS", "600"))
+    CRON_SECRET = os.getenv("CRON_SECRET", "")
+    JOB_RETENTION_DAYS = int(os.getenv("JOB_RETENTION_DAYS", "20"))

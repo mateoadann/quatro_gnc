@@ -1,7 +1,7 @@
 import base64
 import io
 import os
-from typing import Iterable, List
+from typing import Iterable
 
 import cv2
 import numpy as np
@@ -22,18 +22,6 @@ def _decode_image_bytes(data: bytes) -> np.ndarray:
     image = ImageOps.exif_transpose(image)
     image = image.convert("RGB")
     return cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-
-
-def _encode_image_png(image_bgr: np.ndarray) -> bytes:
-    ok, buffer = cv2.imencode(".png", image_bgr)
-    if not ok:
-        raise ValueError("No se pudo codificar la imagen.")
-    return buffer.tobytes()
-
-
-def data_url_from_png(data: bytes) -> str:
-    b64 = base64.b64encode(data).decode("ascii")
-    return f"data:image/png;base64,{b64}"
 
 
 def _encode_preview_jpeg(image_bgr: np.ndarray, max_dim: int = 900, quality: int = 75) -> bytes:
@@ -152,41 +140,6 @@ def create_pdf_from_data_urls(data_urls: Iterable[str]) -> tuple[bytes, int]:
     images: list[np.ndarray] = []
     for data_url in data_urls:
         images.append(decode_data_url(data_url))
-
-    if not images:
-        raise ValueError("No se recibieron imágenes para generar el PDF.")
-
-    pdf_bytes = create_single_page_pdf_bytes(
-        images_bgr=images,
-        dpi=300,
-        outer_margin_mm=8.0,
-        inner_margin_mm_x=8.0,
-        inner_margin_mm_y=2.0,
-        grid_rows=3,
-        grid_cols=2,
-    )
-    return pdf_bytes, len(images)
-
-
-def save_previews_to_folder(data_urls: Iterable[str], folder: str) -> List[str]:
-    os.makedirs(folder, exist_ok=True)
-    paths: list[str] = []
-    for idx, data_url in enumerate(data_urls):
-        image = decode_data_url(data_url)
-        filename = f"img_{idx + 1}.png"
-        path = os.path.join(folder, filename)
-        cv2.imwrite(path, image)
-        paths.append(path)
-    return paths
-
-
-def create_pdf_from_files(image_paths: Iterable[str]) -> tuple[bytes, int]:
-    images: list[np.ndarray] = []
-    for path in image_paths:
-        image = cv2.imread(path)
-        if image is None:
-            raise ValueError(f"No se pudo leer la imagen {path}")
-        images.append(image)
 
     if not images:
         raise ValueError("No se recibieron imágenes para generar el PDF.")
