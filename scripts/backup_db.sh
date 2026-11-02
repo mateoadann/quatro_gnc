@@ -11,6 +11,7 @@ trap 'rm -f "$TMP"' EXIT
 pg_dump -Fc --no-owner --dbname "$DATABASE_URL_UNPOOLED" --file "$TMP"
 
 AWS_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" AWS_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" AWS_DEFAULT_REGION=auto \
+  AWS_REQUEST_CHECKSUM_CALCULATION=when_required AWS_RESPONSE_CHECKSUM_VALIDATION=when_required \
   aws s3 cp "$TMP" "s3://$BUCKET/$KEY" --endpoint-url "$R2_ENDPOINT" --only-show-errors
 
 SIZE="$(du -h "$TMP" | cut -f1)"
