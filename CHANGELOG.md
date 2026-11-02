@@ -6,6 +6,9 @@ The format is based on "Keep a Changelog" and follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+- Backup diario de la DB (`pg_dump`) a Cloudflare R2 vía GitHub Action, con aviso por Telegram y retención de 14 días.
+
 ### Changed
 - Hosting migrado de AWS Lightsail (Docker + Nginx + SQLite) a Vercel + Neon Postgres.
 - Sesiones en cookie firmada en lugar de Flask-Session en filesystem.

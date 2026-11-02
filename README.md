@@ -60,6 +60,20 @@ flask --app run.py seed-db
 
 Vercel Cron (`vercel.json`, 02:00 UTC = 23:00 ART) llama a `/cron/cleanup-jobs`, que elimina los registros con más de `JOB_RETENTION_DAYS` días (20 por defecto), incluyendo los PDFs almacenados.
 
+## Backups
+
+Un GitHub Action (`.github/workflows/db-backup.yml`, 03:00 UTC todos los días o a mano con `workflow_dispatch`) corre `scripts/backup_db.sh`: hace `pg_dump -Fc` de Neon (conexión directa, sin pooler) y lo sube a `s3://quatro-gnc-backups/<timestamp>.dump` en Cloudflare R2. Una regla de lifecycle borra los objetos a los 14 días. Avisa por Telegram si sale bien o mal.
+
+Secrets requeridos en GitHub: `DATABASE_URL_UNPOOLED`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ENDPOINT`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+
+Restaurar (en una DB vacía o de prueba, con `postgresql-client` igual o más nuevo que el servidor):
+
+```bash
+AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_DEFAULT_REGION=auto \
+  aws s3 cp s3://quatro-gnc-backups/<timestamp>.dump . --endpoint-url "$R2_ENDPOINT"
+pg_restore --no-owner --clean --if-exists --dbname "$DATABASE_URL_UNPOOLED" <timestamp>.dump
+```
+
 ## Limites
 
 - Vercel rechaza requests de más de 4.5 MB: el navegador achica las fotos (máx. 1800px, JPEG) antes de subirlas.

@@ -53,6 +53,7 @@ Routes (`app/routes.py`) act as controllers. Business logic lives in `app/servic
 - **AJAX partials**: Tables refresh via AJAX returning HTML fragments from `templates/partials/`
 - **4.5 MB request limit**: Vercel rejects bigger bodies, so `main.js` downscales photos client-side before upload
 - **Job cleanup**: Vercel Cron hits `/cron/cleanup-jobs` daily (checks `CRON_SECRET`) and deletes jobs older than `JOB_RETENTION_DAYS` (default 20)
+- **DB backup**: GitHub Action `db-backup.yml` runs `scripts/backup_db.sh` daily at 03:00 UTC (`pg_dump -Fc` via unpooled URL to R2 bucket `quatro-gnc-backups`, 14-day lifecycle, Telegram notice); restore steps in README
 
 ### Services
 - `app/services/img_to_pdf.py` — Image processing and PDF generation
