@@ -1,18 +1,13 @@
-import time
+from datetime import datetime, timedelta
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
 from flask_login import current_user, login_required, login_user, logout_user
 
-from .extensions import login_manager
-from .models import User
+from .extensions import db, login_manager
+from .models import LoginThrottle, User
 
 
 auth = Blueprint("auth", __name__)
-
-# In-memory rate limiting stores (acceptable for 1-2 users / 1-2 workers)
-_rate_limit_store: dict[str, tuple[int, float]] = {}  # ip -> (count, expires_at)
-_fail_store: dict[str, tuple[int, float]] = {}  # username -> (count, expires_at)
-_lockout_store: dict[str, float] = {}  # username -> expires_at
 
 
 @login_manager.user_loader
@@ -27,17 +22,27 @@ def _get_client_ip() -> str:
     return request.remote_addr or "unknown"
 
 
+# Counters live in the DB: serverless instances don't share memory.
+# ponytail: concurrent first attempts for the same key can race on insert (500),
+# switch to an ON CONFLICT upsert if that ever shows up in logs.
 def _cleanup_expired() -> None:
-    now = time.monotonic()
-    expired_ips = [ip for ip, (_, exp) in _rate_limit_store.items() if exp <= now]
-    for ip in expired_ips:
-        del _rate_limit_store[ip]
-    expired_users = [u for u, (_, exp) in _fail_store.items() if exp <= now]
-    for u in expired_users:
-        del _fail_store[u]
-    expired_locks = [u for u, exp in _lockout_store.items() if exp <= now]
-    for u in expired_locks:
-        del _lockout_store[u]
+    LoginThrottle.query.filter(LoginThrottle.expires_at <= datetime.utcnow()).delete()
+    db.session.commit()
+
+
+def _bump(key: str, window: int) -> LoginThrottle:
+    now = datetime.utcnow()
+    entry = db.session.get(LoginThrottle, key)
+    if entry is None:
+        entry = LoginThrottle(key=key, count=0, expires_at=now + timedelta(seconds=window))
+        db.session.add(entry)
+    entry.count += 1
+    db.session.commit()
+    return entry
+
+
+def _seconds_left(entry: LoginThrottle) -> int:
+    return max(1, int((entry.expires_at - datetime.utcnow()).total_seconds()))
 
 
 def _check_rate_limit(ip: str) -> int | None:
@@ -45,28 +50,17 @@ def _check_rate_limit(ip: str) -> int | None:
     window = current_app.config.get("LOGIN_RATE_WINDOW", 0)
     if limit <= 0 or window <= 0:
         return None
-    now = time.monotonic()
-    entry = _rate_limit_store.get(ip)
-    if entry and entry[1] > now:
-        count = entry[0] + 1
-        expires_at = entry[1]
-    else:
-        count = 1
-        expires_at = now + window
-    _rate_limit_store[ip] = (count, expires_at)
-    if count > limit:
-        return max(1, int(expires_at - now))
+    entry = _bump(f"ip:{ip}", window)
+    if entry.count > limit:
+        return _seconds_left(entry)
     return None
 
 
 def _check_lockout(username: str) -> int | None:
-    key = username.lower()
-    now = time.monotonic()
-    expires_at = _lockout_store.get(key)
-    if expires_at and expires_at > now:
-        return max(1, int(expires_at - now))
-    if expires_at:
-        del _lockout_store[key]
+    limit = current_app.config.get("LOGIN_FAIL_LIMIT", 0)
+    entry = db.session.get(LoginThrottle, f"user:{username.lower()}")
+    if limit > 0 and entry and entry.count >= limit:
+        return _seconds_left(entry)
     return None
 
 
@@ -75,26 +69,17 @@ def _register_failure(username: str) -> int | None:
     lock_seconds = current_app.config.get("LOGIN_LOCKOUT_SECONDS", 0)
     if limit <= 0 or lock_seconds <= 0:
         return None
-    key = username.lower()
-    now = time.monotonic()
-    entry = _fail_store.get(key)
-    if entry and entry[1] > now:
-        count = entry[0] + 1
-        expires_at = entry[1]
-    else:
-        count = 1
-        expires_at = now + lock_seconds
-    _fail_store[key] = (count, expires_at)
-    if count >= limit:
-        _lockout_store[key] = now + lock_seconds
+    entry = _bump(f"user:{username.lower()}", lock_seconds)
+    if entry.count >= limit:
+        entry.expires_at = datetime.utcnow() + timedelta(seconds=lock_seconds)
+        db.session.commit()
         return lock_seconds
     return None
 
 
 def _clear_failures(username: str) -> None:
-    key = username.lower()
-    _fail_store.pop(key, None)
-    _lockout_store.pop(key, None)
+    LoginThrottle.query.filter_by(key=f"user:{username.lower()}").delete()
+    db.session.commit()
 
 
 @auth.route("/login", methods=["GET", "POST"])
@@ -103,7 +88,8 @@ def login():
         return redirect(url_for("main.dashboard"))
 
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        # User.username is String(80); longer input would overflow login_throttle.key
+        username = request.form.get("username", "").strip()[:80]
         password = request.form.get("password", "")
         ip = _get_client_ip()
 

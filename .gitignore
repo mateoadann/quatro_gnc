@@ -10,3 +10,5 @@ debug/
 /flask_session
 /nginx/certs/
 !.env.example
+.vercel
+.env.local

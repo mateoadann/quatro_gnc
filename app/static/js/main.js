@@ -741,7 +741,7 @@ if (cropApplyBtn) {
       return;
     }
     ctx.drawImage(cropImage, sx, sy, sw, sh, 0, 0, output.width, output.height);
-    previewItems[activeCropIndex].editedUrl = output.toDataURL("image/png");
+    previewItems[activeCropIndex].editedUrl = output.toDataURL("image/jpeg", 0.92);
     cropRect = null;
     cropStart = null;
     if (cropImage) {
@@ -768,7 +768,7 @@ const rotateDataUrl = (dataUrl, direction) =>
       ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate(direction === "left" ? -Math.PI / 2 : Math.PI / 2);
       ctx.drawImage(image, -image.width / 2, -image.height / 2);
-      resolve(canvas.toDataURL("image/png"));
+      resolve(canvas.toDataURL("image/jpeg", 0.92));
     };
     image.onerror = () => reject(new Error("No se pudo rotar la imagen."));
     image.src = dataUrl;
@@ -840,6 +840,22 @@ if (cropModal) {
   });
 }
 
+// Vercel rejects request bodies over 4.5 MB. Previews and the PDF use at most
+// 900px per document, so downscaling phone photos before upload loses nothing.
+const UPLOAD_MAX_DIM = 1800;
+
+const shrinkImage = async (file) => {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, UPLOAD_MAX_DIM / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.85));
+  return new File([blob], file.name, { type: "image/jpeg" });
+};
+
 const setPreviewLoading = (loading) => {
   if (!imgPreviewBtn) {
     return;
@@ -872,15 +888,15 @@ if (imgPreviewBtn && imgForm) {
       showToast("No hay nuevas imagenes para previsualizar.", "info", 3600);
       return;
     }
-    const formData = new FormData();
-    formData.set("enhance_mode", imgEnhanceSelect?.value || "soft");
-    const filesToSend = pendingFiles.length ? pendingFiles : selectedFiles;
-    filesToSend.forEach((file) => {
-      formData.append("images", file);
-      formData.append("file_keys", buildFileKey(file));
-    });
     setPreviewLoading(true);
     try {
+      const formData = new FormData();
+      formData.set("enhance_mode", imgEnhanceSelect?.value || "soft");
+      const filesToSend = pendingFiles.length ? pendingFiles : selectedFiles;
+      for (const file of filesToSend) {
+        formData.append("images", await shrinkImage(file));
+        formData.append("file_keys", buildFileKey(file));
+      }
       const response = await fetch("/tools/img-to-pdf/preview", {
         method: "POST",
         body: formData,

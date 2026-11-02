@@ -6,6 +6,16 @@ The format is based on "Keep a Changelog" and follows Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+- Hosting migrado de AWS Lightsail (Docker + Nginx + SQLite) a Vercel + Neon Postgres.
+- Sesiones en cookie firmada en lugar de Flask-Session en filesystem.
+- Rate limiting y bloqueo del login persistidos en la DB (tabla `login_throttle`).
+- Limpieza diaria de jobs de más de 20 días vía Vercel Cron (`/cron/cleanup-jobs`).
+- Las fotos se achican en el navegador antes de subirlas (límite de 4.5 MB de Vercel).
+
+### Removed
+- Dockerfile, docker-compose, Nginx, scripts del VPS y comando `cleanup-old-jobs`.
+
 ## [0.1.0] - 2026-01-10
 ### Added
 - Initial SaaS baseline (login local, RPA, IMG_to_PDF, security hardening)
